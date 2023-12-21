@@ -164,18 +164,22 @@ class MultiverseEventManager:
         for level in self.mvEvent.settings['multiverse_dating_question_settings']:
             if self.mvEvent.id != level['event_id']:
                 continue
+            if level['level'] < 2:
+                continue
 
-            print(f"Level: {level['level']}")
-            print("")
+            print(f"Level {level['level']}:")
+            questionId = 0
 
             for question in level['question']:
+                questionId += 1
                 print(f"Question: {question['content']}")
                 choiceId = 0
                 for answer in question['answer_list']:
                     choiceId += 1
                     if answer['is_true'] == 1:
-                        print(f"Answer {choiceId}: {answer['answer']} ({answer['exp']} exp) ({answer['cost'][0]['amount']} energy)")
-                print("")
+                        print(f"    Answer{choiceId}: {answer['answer']} ({answer['exp']} exp) ({answer['cost'][0]['amount']} energy)")
+                if questionId == 5:
+                    break
             print("")
         
     """
