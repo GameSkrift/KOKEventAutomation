@@ -346,7 +346,6 @@ class EventManager:
     """
         collects wine from the machine
     """
-
     def collect(self, sub: Subscriber):
         r = sub.network.event_sd_collect(self.sdEvent.id)
         sub.lastClaimed = r['server_time']
