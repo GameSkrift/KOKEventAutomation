@@ -27,26 +27,39 @@ class NetworkManager:
             os.mkdir(CONFIG_DIR)
 
     """ Log into the game by user's nutaku ID and update user database session. If session ID is given, bypass the login request."""
-    async def login(self, discord_user_id, session_id=None) -> None:
+    async def register(self, discord_user_id, session_id=None) -> None:
         record = await self.db.user.get_user_record(discord_user_id)
         if session_id:
-            await self.db.user.update_session_id(discord_user_id, session_id)
+            me = self.get(self.api.user.info, record['user_id'], session_id, record['user_id'][:3]).me()
+            if record['display_name']:
+                await self.db.user.update_session_id(discord_user_id, session_id)
+            else:
+                await self.db.user.update_session(discord_user_id, me['user_id'], me['display_name'], session_id, socket_token, me['last_login_time'])
             self.logger.info(f"(User: {discord_user_id}) has updated new session_id ({session_id})")
         else:
-            acc = await self.post(discord_user_id, self.api.auth.login.game_account, { "login_id": record['nutaku_id'], "login_type": 0, "access_token": "", "pw": record['nutaku_id'] }, require_login=False)
-            if acc.success():
-                login_info = acc.response()
-                session_id = login_info['session_id']
-                account_id = login_info['account_id']
-                user = await self.post(discord_user_id, self.api.auth.login.user, { "server_prefix": record['user_id'][:3], "account_id": account_id, "session_id": session_id }, require_login=False)
-                if user.success():
-                    me = user.me()
-                    await self.db.user.update_session(discord_user_id, me['user_id'], me['display_name'], session_id, user.response()['socket_token'], me['last_login_time'])
-                    self.logger.info(f"(User: {discord_user_id}) has updated new session_id ({session_id})")
-                    await asyncio.sleep(1)
-            else:
-                self.logger.error(f"(User: {discord_user_id}) failed logging into the game, reason: {acc.error_message()}")
+            info = self.login(discord_user_id, record['nutaku_id'], record['user_id'][:3])
+            if info:
+                await self.db.user.update_session(discord_user_id, info['user_id'], info['name'], info['session_id'], info['socket_token'], info['last_login_time'])
+                self.logger.info(f"(User: {discord_user_id}) has updated new session_id ({info['session_id']})")
+        # ensure that the new session has flushed into disk
+        await asyncio.sleep(1)
 
+    """ POST login request and return player credentials on success. """
+    def login(self, discord_user_id, nutaku_id, prefix) -> dict | None:
+        acc = requests.post(self.api.auth.login.game_account, { "login_id": nutaku_id, "login_type": 0, "access_token": "", "pw": nutaku_id }).json()
+        if acc['success']:
+            login_info = acc['response']
+            session_id = login_info['session_id']
+            account_id = login_info['account_id']
+            uri = f"{self.api.auth.login.user}nutaku_id={nutaku_id}"
+            user = requests.post(uri, { "server_prefix": prefix, "account_id": account_id, "session_id": session_id }).json()
+            if user['success']:
+                me = user['me']
+                return { 'user_id': me['user_id'], 'name': me['display_name'], 'session_id': session_id, 'socket_token': user['response']['socket_token'], 'last_login_time': me['last_login_time'] }
+            else:
+                self.logger.error(f"(User: {discord_user_id}) failed logging into the game, reason: {user['error_message']}")
+        else:
+            self.logger.error(f"(User: {discord_user_id}) failed logging into the game, reason: {acc['error_message']}")
 
     """ Fetch the asset list from server and download config file by filename. """
     def install_config(self, filename) -> dict | None:
@@ -121,39 +134,54 @@ class NetworkManager:
                     # Copy the BytesIO stream to the output file
                     outfile.write(bytestream.getbuffer())
 
-    """ Universal GET request builder for game client by API name. """
-    async def get(self, discord_user_id, api_name, q=None, event_id=None, battle_id=None) -> dict | None:
+    """ Async GET request builder with game server APIs for users. """
+    async def get_async(self, api_name, discord_user_id, q=None, event_id=None, battle_id=None) -> dict | None:
         uri = await self._fetch_uri(discord_user_id)
+        user_id = uri['user_id']
+        session_id = uri['session_id']
+        return self.get(api_name, user_id, session_id, q, event_id, battle_id)
+
+    """ Async POST request builder with game server APIs for users. """
+    async def post_async(self, api_name, discord_user_id, payload, nutaku_id=None, require_login=True) -> dict | None:
+        uri = await self._fetch_uri(discord_user_id, require_login)
+        user_id = uri['user_id']
+        session_id = uri['session_id']
+        return self.post(api_name, user_id, session_id, payload, nutaku_id, require_login)
+
+    """ GET request builder with game server APIs for manual users. """
+    def get(self, api_name, user_id, session_id, q=None, event_id=None, battle_id=None) -> dict | None:
+        assert len(user_id) == 13
+        prefix = user_id[:3]
         try:
             if q and api_name == self.api.user.friend.search:
-                uri = "{}q={}&user_id={}&session_id={}&server_prefix={}".format(api_name, q, uri['user_id'], uri['session_id'], uri['prefix'])
+                uri = "{}q={}&user_id={}&session_id={}&server_prefix={}".format(api_name, q, user_id, session_id, prefix)
             elif event_id:
-                uri = "{}event_id={}&user_id={}&session_id={}&server_prefix={}".format(api_name, event_id, uri['user_id'], uri['session_id'], uri['prefix'])
+                uri = "{}event_id={}&user_id={}&session_id={}&server_prefix={}".format(api_name, event_id, user_id, session_id, prefix)
             elif battle_id:
-                uri = "{}user_id={}&session_id={}&server_prefix={}&battleId={}&serverPrefix={}".format(api_name, uri['user_id'], uri['session_id'], uri['prefix'], battle_id, uri['prefix'])
+                uri = "{}user_id={}&session_id={}&server_prefix={}&battleId={}&serverPrefix={}".format(api_name, user_id, session_id, prefix, battle_id, prefix)
             else:
-                uri = "{}user_id={}&session_id={}&server_prefix={}".format(api_name, uri['user_id'], uri['session_id'], uri['prefix'])
+                uri = "{}user_id={}&session_id={}&server_prefix={}".format(api_name, user_id, session_id, prefix)
             return Response(requests.get(uri).json())
         except Exception as e:
             self.logger.exception(f"GET request error: {e}")
             return None
 
-
-    """ Universal POST request builder for game client by API name. """
-    async def post(self, discord_user_id, api_name, payload, require_login=True):
-        uri = await self._fetch_uri(discord_user_id, require_login)
-        api = self.api
+    """ POST request builder with game server APIs for manual users. """
+    def post(self, api_name, user_id, session_id, payload, nutaku_id=None, require_login=True) -> dict | None:
+        assert len(user_id) == 13
+        prefix = user_id[:3]
         try:
-            match api_name:
-                case api.auth.login.game_account:
-                    uri = f"{api_name}"
-                    return Response(requests.post(uri, payload).json())
-                case api.auth.login.user:
-                    uri = "{}nutaku_id={}".format(api_name, uri['nutaku_id'])
-                    return Response(requests.post(uri, payload).json())
-                case _:
-                    uri = "{}user_id={}&session_id={}&server_prefix={}".format(api_name, uri['user_id'], uri['session_id'], uri['prefix'])
-                    return Response(requests.post(uri, payload).json())
+            if require_login:
+                uri = "{}user_id={}&session_id={}&server_prefix={}".format(api_name, user_id, session_id, prefix)
+                return Response(requests.post(uri, payload).json())
+            else:
+                match api_name:
+                    case self.api.auth.login.game_account:
+                        uri = f"{api_name}"
+                        return Response(requests.post(uri, payload).json())
+                    case self.api.auth.login.user:
+                        uri = "{}nutaku_id={}".format(api_name, nutaku_id)
+                        return Response(requests.post(uri, payload).json())
         except Exception as e:
             self.logger.exception(f"POST request error: {e}")
             return None
