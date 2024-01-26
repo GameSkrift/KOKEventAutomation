@@ -87,15 +87,16 @@ class MultiverseDatingManager(NetworkManager):
         else:
             self.logger.error(f"There's no multiverse event running right now.")
 
-    def create_user_instance(self, record: dict):
+    async def create_user_instance(self, record: dict):
         instance = MultiverseDating(record['discord_user_id'], self.event_id, self.end_time, self.reward_list, self.gift_list, self.machine_list, self.avg_dict)
+        await instance.on_start()
         return instance
-    
+
     async def start(self) -> list:
         records = await self.db.user.get_all_records()
         async with asyncio.TaskGroup() as tg:
             for record in records:
-                event = self.create_user_instance(record)
+                event = await self.create_user_instance(record)
                 tg.create_task(event.run_loop())
         #TODO: listen on new subscriber
 
@@ -120,7 +121,6 @@ class MultiverseDating(NetworkManager):
 
     async def on_start(self) -> None:
         await super().register(self.discord_user_id)
-        await asyncio.sleep(3)
         self.is_sync = await self.fetch_records()
 
     async def run_loop(self) -> None:
@@ -128,7 +128,6 @@ class MultiverseDating(NetworkManager):
             if self.is_sync:
                 # update event records
                 await super().register(self.discord_user_id)
-                await asyncio.sleep(3)
                 await self.claim_energy()
                 await self.auto_dialog()
                 await self.daily_meet()
@@ -276,10 +275,10 @@ class MultiverseDating(NetworkManager):
             self.dating_record = resp.response()['user_multiverse_dating_record']
             self.energy = resp.reduced_item_list()[0]['amount']
             if self.dating_record['exp'] > cmp_record['exp']:
-                self.logger.info(f"(User: {self.discord_user_id}) has accumulated {self.dating_record['exp']} EXP, next question ID: {self.dating_record['current_question']}")
+                self.logger.info(f"(User: {self.discord_user_id}) has answered the dialog successfully! total EXP: {self.dating_record['exp']}, next question ID: {self.dating_record['current_question']}")
                 return True
             else:
-                self.logger.warning(f"(User: {self.discord_user_id}) didn't increase EXP by selecting correct answer, please inform admin to resolve issues.")
+                self.logger.warning(f"(User: {self.discord_user_id}) selected the wrong answer! please inform admin to resolve issues.")
                 return False
         else:
             self.logger.error(f"(User: {self.discord_user_id}) failed to submit the answer, reason: {resp.error_message()}")
@@ -287,16 +286,16 @@ class MultiverseDating(NetworkManager):
 
     """ Override get request from NetworkManager to return EventResponse """
     async def _get(self, api_name, **kwargs) -> dict:
-        resp = await super().get_async(api_name, self.discord_user_id, **kwargs)
+        resp = await super().get(api_name, self.discord_user_id, **kwargs)
         return EventResponse(resp.body)
     
     """ Override post request from NetworkManager to return EventResponse """
-    async def _post(self, api_name, payload, **kwargs) -> dict:
-        resp = await super().post_async(api_name, self.discord_user_id, payload, **kwargs)
+    async def _post(self, api_name, payload) -> dict:
+        resp = await super().post(api_name, payload, self.discord_user_id)
         return EventResponse(resp.body)
     
     """ Override database CRUD to fetch next_update timestamp from the user storage """
-    async def get_next_update_timestamp(self, *args, **kwargs) -> int:
+    async def get_next_update_timestamp(self) -> int:
         next_update_ts = await self.db.user.get_next_update_timestamp(self.discord_user_id)
         return next_update_ts
 
