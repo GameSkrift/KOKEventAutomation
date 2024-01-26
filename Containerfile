@@ -4,8 +4,8 @@ LABEL \
   org.opencontainers.image.author="Sheldon Knuth <sheruost@duck.com>" \
   org.opencontainers.image.licenses=GPL-3.0 \
   com.github.GameSkrift="KOKEventAutomation" \
-  version="0.1" \
-  description="provide game event automation by RESTful requests."
+  version="0.2" \
+  description="Provide a fully data-driven and asynchronous runtime support for mobile game King of Kinks event automation hosted on Nutaku Games™ platform."
 
 # Create a new user
 RUN useradd \
