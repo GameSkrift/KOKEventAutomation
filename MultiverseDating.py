@@ -30,7 +30,7 @@ class MultiverseDatingManager(NetworkManager):
 
     """ Download latest event setting configs from the server CDN, and build the required list for script automation. """
     def setup(self):
-        config = self.install_config("MultiverseEventSetting.zip")
+        config = super().install_config("MultiverseEventSetting.zip")
         now_ts = int(datetime.now().timestamp())
 
         # Retrieve event_id
@@ -290,8 +290,8 @@ class MultiverseDating(NetworkManager):
         return EventResponse(resp.body)
     
     """ Override post request from NetworkManager to return EventResponse """
-    async def _post(self, api_name, payload) -> dict:
-        resp = await super().post(api_name, payload, self.discord_user_id)
+    async def _post(self, api_name, payload, **kwargs) -> dict:
+        resp = await super().post(api_name, payload, self.discord_user_id, **kwargs)
         return EventResponse(resp.body)
     
     """ Override database CRUD to fetch next_update timestamp from the user storage """
