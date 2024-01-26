@@ -5,6 +5,7 @@ import logging
 import requests
 import asyncio
 import sys
+import random
 from datetime import datetime
 from contextlib import suppress
 from network import NetworkManager, Response
@@ -86,18 +87,17 @@ class MultiverseDatingManager(NetworkManager):
         else:
             self.logger.error(f"There's no multiverse event running right now.")
 
-    async def create_user_instance(self, record: dict):
+    def create_user_instance(self, record: dict):
         instance = MultiverseDating(record['discord_user_id'], self.event_id, self.end_time, self.reward_list, self.gift_list, self.machine_list, self.avg_dict)
-        await instance.setup()
         return instance
     
     async def start(self) -> list:
-        self.setup()
         records = await self.db.user.get_all_records()
         async with asyncio.TaskGroup() as tg:
             for record in records:
-                event = await self.create_user_instance(record)
+                event = self.create_user_instance(record)
                 tg.create_task(event.run_loop())
+        #TODO: listen on new subscriber
 
 
 class MultiverseDating(NetworkManager):
@@ -116,24 +116,30 @@ class MultiverseDating(NetworkManager):
         self.avg_dict = avg_dict
         self.energy = 0
         self.duration = 0
+        self.is_sync = False
 
-    async def setup(self) -> None:
-        await self.login(self.discord_user_id)
+    async def on_start(self) -> None:
+        await super().register(self.discord_user_id)
         await asyncio.sleep(3)
-        await self.fetch_records()
+        self.is_sync = await self.fetch_records()
 
     async def run_loop(self) -> None:
         while self.end_time > int(datetime.now().timestamp()):
-            await self.login(self.discord_user_id)
-            # update event records
-            await self.claim_energy()
-            await self.auto_dialog()
-            await self.daily_meet()
-            await self.automate_level_rewards()
-            await self.wait_until_next_update()
+            if self.is_sync:
+                # update event records
+                await super().register(self.discord_user_id)
+                await asyncio.sleep(3)
+                await self.claim_energy()
+                await self.auto_dialog()
+                await self.daily_meet()
+                await self.automate_level_rewards()
+                await self.wait_until_next_update()
+            else:
+                await self.on_start()
 
     """ Complete event dialogues if player energy sufficient. """
     async def auto_dialog(self):
+        await self.fetch_records()
         while self.energy >= self._current_question_cost():
             if not await self.select_answer():
                  break
@@ -174,11 +180,11 @@ class MultiverseDating(NetworkManager):
                 break
             else:
                 if current_level not in claimed_levels:
-                    payload = { 'event_id': self.event_id, 'level': available_level }
+                    payload = { 'event_id': self.event_id, 'level': current_level }
                     await self._post(self.api.multiverse_dating.level.claim, payload)
                     self.logger.info(f"(User: {self.discord_user_id}) claimed (Level: {level_reward['level']}) rewards.")
                     # only 2, 4, 5 level rewards contain upgrade materials
-                    match available_level:
+                    match current_level:
                         case 2:
                             if self.dating_record['item_tier'] == 1:
                                 await self.upgrade(2, self.machine_list[1]['cost'])
@@ -228,16 +234,18 @@ class MultiverseDating(NetworkManager):
         else:
             self.logger.error(f"(User: {self.discord_user_id}) failed to send gift, reason: {resp.error_message()}")
     
-    """ Get the latest event records """
-    async def fetch_records(self) -> None:
+    """ Get the latest event records, return bool. """
+    async def fetch_records(self) -> bool:
         resp = await self._get(self.api.multiverse_dating.records)
         if resp.success():
             self.dating_record = resp.dating_record(self.event_id)
             self.dialog_records = resp.dialog_records(self.event_id)
             self.logger.info(f"(User: {self.discord_user_id}) updated dating record.")
             self._update_duration()
+            return True
         else:
             self.logger.error(f"(User: {self.discord_user_id}) failed to fetch event records, reason: {resp.error_message()}")
+            return False
 
     """ Upgrade collect machine """
     async def upgrade(self, tier: int, cost: str) -> None:
@@ -255,7 +263,6 @@ class MultiverseDating(NetworkManager):
     async def select_answer(self) -> bool:
         cmp_record = self.dating_record
         cheatsheet = self.avg_dict[cmp_record['level']]
-
         for qa in cheatsheet:
             if qa['question_id'] == cmp_record['current_question']:
                 select_id = qa['select_id']
@@ -280,12 +287,12 @@ class MultiverseDating(NetworkManager):
 
     """ Override get request from NetworkManager to return EventResponse """
     async def _get(self, api_name, **kwargs) -> dict:
-        resp = await super().get(self.discord_user_id, api_name, **kwargs)
+        resp = await super().get_async(api_name, self.discord_user_id, **kwargs)
         return EventResponse(resp.body)
     
     """ Override post request from NetworkManager to return EventResponse """
     async def _post(self, api_name, payload, **kwargs) -> dict:
-        resp = await super().post(self.discord_user_id, api_name, payload, **kwargs)
+        resp = await super().post_async(api_name, self.discord_user_id, payload, **kwargs)
         return EventResponse(resp.body)
     
     """ Override database CRUD to fetch next_update timestamp from the user storage """
@@ -295,11 +302,11 @@ class MultiverseDating(NetworkManager):
 
     """ Override database CRUD to set next_update timestamp at wait until the energy reaches at 80% machine capacity """
     async def wait_until_next_update(self) -> None:
-        gap = int(self.duration * 0.8)
-        next_update_ts = int(datetime.now().timestamp()) + gap
+        interval = int(self.duration * random.randint(80, 90) / 100)
+        next_update_ts = int(datetime.now().timestamp()) + interval
         await self.db.user.set_next_update_timestamp(self.discord_user_id, next_update_ts)
-        self.logger.info(f"(User: {self.discord_user_id}) coroutine starts sleeping for {gap} seconds.")
-        await asyncio.sleep(gap)
+        self.logger.info(f"(User: {self.discord_user_id}) coroutine starts sleeping for {interval} seconds.")
+        await asyncio.sleep(interval)
 
     def _current_question_cost(self) -> int:
         level = self.dating_record['level']
@@ -317,6 +324,7 @@ class MultiverseDating(NetworkManager):
                     self.logger.info(f"(User: {self.discord_user_id}) updated duration to {self.duration} seconds.")
         except:
             self.logger.exception(f"(User: {self.discord_user_id}) has not initialised dating record yet!")
+
 
 class EventResponse(Response):
     def __init__(self, body):
