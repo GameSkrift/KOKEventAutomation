@@ -2,7 +2,7 @@
 import json
 import requests
 
-class GameApi:
+class GameAPI:
     """ only support NTK version for now """
     auth_url = 'https://ntk-login-api.kokmm.net'
     data_url = 'https://ntk-zone-api.kokmm.net'
@@ -15,6 +15,7 @@ class GameApi:
         self.auth = self.Auth(self.auth_url)
         self.user = self.User(self.data_url)
         self.accumulate_top_up = self.AccumulateTopUp(self.data_url)
+        self.redemption = self.Redemption(self.data_url)
         self.slg = self.Slg(self.data_url)
         self.crystal = self.Crystal(self.data_url)
         self.guild = self.Guild(self.data_url)
@@ -197,6 +198,18 @@ class GameApi:
         class _Daily:
             def __init__(self, url):
                 self.records = f"{url}/api/accumulate_top_up/daily/records?"
+
+    class Redemption:
+        """ An inner class level of `/redemption` API corresponding to `GameApi.data_url`
+        [URI]: user_id={}&session_id={}&server_prefix={}
+
+        FROM `GameApi.data_url`
+        **POST** /api/redemption/redeem?[URI]
+            - **PAYLOAD** { "code": [CODE] }
+            - [CODE]: [a-zA-Z0-9]+
+        """
+        def __init__(self, url):
+            self.redeem = f"{url}/api/redemption/redeem?"
 
     class Slg:
         """ An inner class level of `/slg` API corresponding to `GameApi.data_url`
