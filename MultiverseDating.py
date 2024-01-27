@@ -9,8 +9,7 @@ import random
 from datetime import datetime
 from contextlib import suppress
 from network import NetworkManager, Response
-from storage import Storage
-from api import GameApi
+from storage import Database, UserDocument, DiscordID
 
 def handler():
     handler = logging.StreamHandler()
@@ -87,22 +86,22 @@ class MultiverseDatingManager(NetworkManager):
         else:
             self.logger.error(f"There's no multiverse event running right now.")
 
-    async def create_user_instance(self, record: dict):
-        instance = MultiverseDating(record['discord_user_id'], self.event_id, self.end_time, self.reward_list, self.gift_list, self.machine_list, self.avg_dict)
+    async def create_user_instance(self, user: UserDocument):
+        instance = MultiverseDating(user.doc_id, self.event_id, self.end_time, self.reward_list, self.gift_list, self.machine_list, self.avg_dict)
         await instance.on_start()
         return instance
 
     async def start(self) -> list:
-        records = await self.db.user.get_all_records()
+        users = await self.db.user.get_all_users()
         async with asyncio.TaskGroup() as tg:
-            for record in records:
-                event = await self.create_user_instance(record)
+            for user in users:
+                event = await self.create_user_instance(user)
                 tg.create_task(event.run_loop())
         #TODO: listen on new subscriber
 
 
 class MultiverseDating(NetworkManager):
-    def __init__(self, discord_user_id, event_id, end_time, reward_list, gift_list, machine_list, avg_dict):
+    def __init__(self, discord_user_id: DiscordID, event_id: int, end_time: int, reward_list, gift_list, machine_list, avg_dict):
         super().__init__()
         self.logger = logging.getLogger('Clicker 2.5')
         self.logger.setLevel(logging.INFO)
@@ -296,7 +295,8 @@ class MultiverseDating(NetworkManager):
     
     """ Override database CRUD to fetch next_update timestamp from the user storage """
     async def get_next_update_timestamp(self) -> int:
-        next_update_ts = await self.db.user.get_next_update_timestamp(self.discord_user_id)
+        doc = await self.db.user.get_user(self.discord_user_id)
+        next_update_ts = doc.get_next_update_timestamp()
         return next_update_ts
 
     """ Override database CRUD to set next_update timestamp at wait until the energy reaches at 80% machine capacity """
