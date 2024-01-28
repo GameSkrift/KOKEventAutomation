@@ -149,9 +149,11 @@ class Database(TinyDB):
         self.user = self.UserTable(self.storage_type)
 
     class UserTable(Table):
+        logger = logging.getLogger("usertable")
+
         def __init__(self, storage):
+            #TODO: change default isolevel, refers to https://github.com/VermiIIi0n/async-tinydb/issues/12
             super().__init__(storage, "user", no_dbcache=True, document_id_class=DiscordID, document_class=UserDocument)
-            self.logger = logging.getLogger("usertable")
 
         async def create(self, key: DiscordID, user_id: int, nutaku_id: int = None, premium=False, bot=False):
             new_ts = self._get_current_timestamp()
@@ -159,7 +161,6 @@ class Database(TinyDB):
                 assert len(str(user_id)) == 13
                 user = { 'nutaku_id': nutaku_id, 'user_id': user_id, 'guild_id': None, 'name': None, 'premium': premium, 'bot': bot, 'session_id': None, 'socket_token': None, 'create_time': new_ts, 'last_update': new_ts, 'last_session_update': 0, 'next_update': 0 }
                 document = UserDocument(user, key)
-                print(document.get_next_update_timestamp())
                 await self.insert(document)
             except Exception as e:
                 self.logger.exception(f"{e}")
@@ -202,7 +203,7 @@ class Database(TinyDB):
             await self.update({ 'last_update': new_ts, 'next_update': next_ts }, doc_ids=[key])
 
         async def verify_socket_token(self, key: DiscordID, since_sec=21600) -> bool:
-            user_info = await self.get_user_record(key)
+            user_info = await self.get_user(key)
             new_ts = self._get_current_timestamp()
             return since_sec > (new_ts - user_info['last_session_update'])
 
