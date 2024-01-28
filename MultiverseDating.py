@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 import json
 import logging
-import requests
 import asyncio
 import sys
 import random
 from datetime import datetime
 from contextlib import suppress
 from network import NetworkManager, Response
+from event import BaseConfig, BaseEventManager
 from storage import Database, UserDocument, DiscordID
 
 def handler():
@@ -18,21 +18,20 @@ def handler():
     handler.setFormatter(formatter)
     return handler
 
-class MultiverseDatingManager(NetworkManager):
-    _logger = logging.getLogger('MultiverseDatingManager')
+class MultiverseDatingManager(BaseEventManager):
+    _logger = logging.getLogger(__name__)
 
     def __init__(self):
-        super().__init__()
+        super().__init__('MultiverseEventSetting.zip')
         self.event_id = None
         self._logger.setLevel(logging.INFO)
         if not self._logger.handlers:
             self._logger.addHandler(handler())
 
     """ Download latest event setting configs from the server CDN, and build the required list for script automation. """
-    def setup(self):
-        config = super().install_config("MultiverseEventSetting.zip")
+    async def build_event_config(self):
+        config = await BaseConfig(self.config).get_dict()
         now_ts = int(datetime.now().timestamp())
-
         # Retrieve event_id
         for event in config['multiverse_dating_settings']:
             if event['timeslot_detail'][0]['end_time'] > now_ts > event['timeslot_detail'][0]['start_time']:
@@ -92,14 +91,6 @@ class MultiverseDatingManager(NetworkManager):
         await instance.on_start()
         return instance
 
-    async def start(self) -> list:
-        users = await self.db.user.get_all_users()
-        async with asyncio.TaskGroup() as tg:
-            for user in users:
-                event = await self.create_user_instance(user)
-                tg.create_task(event.run_loop())
-        #TODO: listen on new subscriber
-
 
 class MultiverseDating(NetworkManager):
     _logger = logging.getLogger('Clicker 2.5')
@@ -125,19 +116,21 @@ class MultiverseDating(NetworkManager):
         self.is_sync = await self.fetch_records()
 
     async def run_loop(self) -> None:
-        while self.end_time > int(datetime.now().timestamp()):
-            if self.is_sync:
-                try:
+        if self.is_sync:
+            while self.end_time > int(datetime.now().timestamp()):
+                if await self.is_premium():
+                    try:
+                        await super().register(self.discord_user_id)
+                        await self.claim_energy()
+                        await self.auto_dialog()
+                        await self.daily_meet()
+                        await self.automate_level_rewards()
+                        await self.wait_until_next_update()
+                    except Exception as e:
+                        self._logger.exception(f"(User: {self.discord_user_id}) encountered process exception: {e}")
+                else:
                     await super().register(self.discord_user_id)
                     await self.claim_energy()
-                    await self.auto_dialog()
-                    await self.daily_meet()
-                    await self.automate_level_rewards()
-                    await self.wait_until_next_update()
-                except Exception as e:
-                    self._logger.exception(f"(User: {seld.discord_user_id}) encountered process exception: {e}")
-            else:
-                await self.on_start()
 
     """ Complete event dialogues if player energy sufficient. """
     async def auto_dialog(self):
@@ -299,9 +292,14 @@ class MultiverseDating(NetworkManager):
     
     """ Override database CRUD to fetch next_update timestamp from the user storage """
     async def get_next_update_timestamp(self) -> int:
-        doc = await self.db.user.get_user(self.discord_user_id)
-        next_update_ts = doc.get_next_update_timestamp()
+        user = await self.db.user.get_user(self.discord_user_id)
+        next_update_ts = user.get_next_update_timestamp()
         return next_update_ts
+
+    """ Override database CRUD to fetch premium status from the user storage """
+    async def is_premium(self) -> bool:
+        user = await self.db.user.get_user(self.discord_user_id)
+        return user.is_premium()
 
     """ Override database CRUD to set next_update timestamp at wait until the energy reaches at 80% machine capacity """
     async def wait_until_next_update(self) -> None:
@@ -368,9 +366,11 @@ class EventResponse(Response):
 
 
 
+async def main():
+    manager = MultiverseDatingManager()
+    await manager.build_event_config()
+    await manager.run()
 
 if __name__ == '__main__':
     with suppress(KeyboardInterrupt):
-        manager = MultiverseDatingManager()
-        manager.setup()
-        asyncio.run(manager.start())
+        asyncio.run(main())
