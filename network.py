@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import json
-import msgpack
 import logging
-import io
 import os
 import asyncio
 import aiohttp
@@ -11,7 +9,6 @@ from dotenv import load_dotenv
 from zipfile import ZipFile
 from api import GameAPI
 from storage import Database, DiscordID
-from enum import Enum
 
 load_dotenv()
 CONFIG_DIR = os.environ["CONFIG_DIR"]

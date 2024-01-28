@@ -3,7 +3,6 @@ from api import GameApi
 from NetworkManager import NetworkManager
 import unittest
 import json
-import requests
 
 
 class TestGameApi(unittest.TestCase):

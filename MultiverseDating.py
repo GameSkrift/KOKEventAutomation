@@ -3,7 +3,6 @@
 import json
 import logging
 import asyncio
-import sys
 import random
 from datetime import datetime
 from contextlib import suppress
