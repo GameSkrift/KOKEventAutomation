@@ -1,10 +1,10 @@
 FROM python:latest as builder
 
 LABEL \
-  org.opencontainers.image.author="Sheldon Knuth <sheruost@duck.com>" \
+  org.opencontainers.image.author="Sheldon Knuth <sheruost@gameskrift.io>" \
   org.opencontainers.image.licenses=GPL-3.0 \
   com.github.GameSkrift="KOKEventAutomation" \
-  version="0.2" \
+  version="0.3" \
   description="Provide a fully data-driven and asynchronous runtime support for mobile game King of Kinks event automation hosted on Nutaku Games™ platform."
 
 # Create a new user
