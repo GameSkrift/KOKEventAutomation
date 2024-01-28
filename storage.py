@@ -149,7 +149,7 @@ class Database(TinyDB):
         self.user = self.UserTable(self.storage_type)
 
     class UserTable(Table):
-        logger = logging.getLogger("usertable")
+        _logger = logging.getLogger("usertable")
 
         def __init__(self, storage):
             #TODO: change default isolevel, refers to https://github.com/VermiIIi0n/async-tinydb/issues/12
@@ -163,7 +163,7 @@ class Database(TinyDB):
                 document = UserDocument(user, key)
                 await self.insert(document)
             except Exception as e:
-                self.logger.exception(f"{e}")
+                self._logger.exception(f"{e}")
     
         async def get_user(self, key: DiscordID) -> UserDocument:
             user = await self.get(doc_id=key)

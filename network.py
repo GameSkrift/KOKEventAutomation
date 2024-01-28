@@ -18,12 +18,23 @@ load_dotenv()
 CONFIG_DIR = os.environ["CONFIG_DIR"]
 PASSWORD = os.environ["PASSWORD"]
 
+def handler():
+    handler = logging.StreamHandler()
+    dt_fmt = '%Y-%m-%d %H:%M:%S'
+    formatter = logging.Formatter('[{asctime}] [{levelname:<8}] {name}: {message}', dt_fmt, style='{')
+    handler.setFormatter(formatter)
+    return handler
+
+
 class NetworkManager:
+    _logger = logging.getLogger('NetworkManager')
+
     def __init__(self):
         self.api = GameAPI()
         self.db = Database()
-        self.logger = logging.getLogger('NetworkManager')
-        self.logger.setLevel(logging.DEBUG)
+        self._logger.setLevel(logging.INFO)
+        if not self._logger.handlers:
+            self._logger.addHandler(handler())
         if not os.path.exists(CONFIG_DIR):
             os.mkdir(CONFIG_DIR)
 
@@ -38,13 +49,13 @@ class NetworkManager:
                 await self.db.user.update_session_id(discord_user_id, session_id)
             else:
                 await self.db.user.update_user(discord_user_id, int(me['user_id']), me['display_name'], session_id, socket_token, int(me['last_login_time']))
-            self.logger.info(f"(User: {discord_user_id}) has updated new session_id ({session_id})")
+            self._logger.info(f"(User: {discord_user_id}) has updated new session_id ({session_id})")
         else:
             nutaku_id = user.get_nutaku_id()
             info = await self.login(discord_user_id, nutaku_id, prefix)
             if info:
                 await self.db.user.update_user(discord_user_id, int(info['user_id']), info['name'], info['session_id'], info['socket_token'], int(info['last_login_time']))
-                self.logger.info(f"(User: {discord_user_id}) has updated new session_id ({info['session_id']})")
+                self._logger.info(f"(User: {discord_user_id}) has updated new session_id ({info['session_id']})")
         # ensure that the new session has flushed into disk
         await asyncio.sleep(1)
 
@@ -59,9 +70,9 @@ class NetworkManager:
                 me = user.me()
                 return { 'user_id': me['user_id'], 'name': me['display_name'], 'session_id': session_id, 'socket_token': user.response()['socket_token'], 'last_login_time': me['last_login_time'] }
             else:
-                self.logger.error(f"(User: {discord_user_id}) failed logging into the game, reason: {user['error_message']}")
+                self._logger.error(f"(User: {discord_user_id}) failed logging into the game, reason: {user['error_message']}")
         else:
-            self.logger.error(f"(User: {discord_user_id}) failed logging into the game, reason: {acc['error_message']}")
+            self._logger.error(f"(User: {discord_user_id}) failed logging into the game, reason: {acc['error_message']}")
         return None
 
     """ Fetch the asset list from server and download config file by filename. """
@@ -81,7 +92,7 @@ class NetworkManager:
                     with open(full_path, 'br') as f:
                         return msgpack.unpackb(f.read(), raw=False, strict_map_key=False)
         else:
-            self.logger.error(f"Could not find config file with the name {filename}")
+            self._logger.error(f"Could not find config file with the name {filename}")
             return None
 
     """ Download Localization.csv file and return the content. """
@@ -103,11 +114,11 @@ class NetworkManager:
         for metadata in asset_list:
             if keyword in metadata[0]:
                 uri = f"{url}{metadata[1]}"
-                self.logger.debug(f"Downloading content from {uri}")
+                self._logger.debug(f"Downloading content from {uri}")
                 content = requests.get(uri).content
                 bytestream = io.BytesIO(content)
                 download_path = download_dir.joinpath(metadata[0])
-                self.logger.debug(f"(File: {metadata[0]}) has been downloaded at {download_path}, extracting files ...")
+                self._logger.debug(f"(File: {metadata[0]}) has been downloaded at {download_path}, extracting files ...")
                 if metadata[0].endswith('.zip'):
                     with ZipFile(bytestream, 'r') as zip_ref:
                         zip_ref.extractall(download_dir, pwd=PASSWORD.encode('utf-8'))
@@ -124,11 +135,11 @@ class NetworkManager:
             os.mkdir(download_dir)
         for metadata in asset_list:
             uri = f"{url}{metadata[1]}"
-            self.logger.debug(f"Downloading content from {uri}")
+            self._logger.debug(f"Downloading content from {uri}")
             content = requests.get(uri).content
             bytestream = io.BytesIO(content)
             download_path = download_dir.joinpath(metadata[0])
-            self.logger.debug(f"(File: {metadata[0]}) has been downloaded at {download_path}, extracting files ...")
+            self._logger.debug(f"(File: {metadata[0]}) has been downloaded at {download_path}, extracting files ...")
             if metadata[0].endswith('.zip'):
                 with ZipFile(bytestream, 'r') as zip_ref:
                     zip_ref.extractall(download_dir, pwd=PASSWORD.encode('utf-8'))
@@ -150,7 +161,8 @@ class NetworkManager:
         uri = await self._fetch_uri(discord_user_id, require_login)
         user_id = uri['user_id']
         session_id = uri['session_id']
-        return await self._post_async(api_name, payload, user_id, session_id, nutaku_id, require_login)
+        prefix = uri['prefix']
+        return await self._post_async(api_name, payload, user_id, prefix, session_id, nutaku_id, require_login)
 
     """ Async GET request builder. """
     async def _get_async(self, api_name, user_id, session_id, prefix, q=None, event_id=None, battle_id=None) -> dict | None:
@@ -163,12 +175,13 @@ class NetworkManager:
         else:
             uri = "{}user_id={}&session_id={}&server_prefix={}".format(api_name, user_id, session_id, prefix)
         async with aiohttp.ClientSession() as session:
+            self._logger.debug(f"(User: {self.discord_user_id}) is sending GET request to {uri}")
             try:
                 async with session.get(uri) as resp:
                     body = await resp.json()
                     return Response(body)
             except Exception as e:
-                self.logger.exception(f"GET request error: {e}")
+                self._logger.exception(f"GET request error: {e}")
                 return None
 
     """ Async POST request builder. """
@@ -176,12 +189,13 @@ class NetworkManager:
         if require_login:
             async with aiohttp.ClientSession() as session:
                 uri = "{}user_id={}&session_id={}&server_prefix={}".format(api_name, user_id, session_id, prefix)
+                self._logger.debug(f"(User: {self.discord_user_id}) is sending POST request to {uri} with payload {payload}")
                 try:
                     async with session.post(uri, data=payload) as resp:
                         body = await resp.json()
                         return Response(body)
                 except Exception as e:
-                    self.logger.exception(f"POST request error: {e}")
+                    self._logger.exception(f"POST request error: {e}")
                     return None
         else:
             match api_name:
@@ -190,7 +204,7 @@ class NetworkManager:
                 case self.api.auth.login.user:
                     uri = "{}nutaku_id={}".format(api_name, nutaku_id)
                 case _:
-                    self.logger.error(f"The API (name: {api_name}) requires user session.")
+                    self._logger.error(f"(API): {api_name}) requires user session.")
                     return None
             async with aiohttp.ClientSession() as session:
                 try:
@@ -198,7 +212,7 @@ class NetworkManager:
                         body = await resp.json()
                         return Response(body)
                 except Exception as e:
-                    self.logger.exception(f"POST request error: {e}")
+                    self._logger.exception(f"POST request error: {e}")
                     return None
 
     async def _fetch_uri(self, discord_user_id: DiscordID, require_login=True) -> dict:

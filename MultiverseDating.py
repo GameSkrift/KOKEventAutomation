@@ -19,13 +19,14 @@ def handler():
     return handler
 
 class MultiverseDatingManager(NetworkManager):
+    _logger = logging.getLogger('MultiverseDatingManager')
+
     def __init__(self):
         super().__init__()
         self.event_id = None
-        self.logger = logging.getLogger('MultiverseDatingManager')
-        self.logger.setLevel(logging.INFO)
-        if not self.logger.handlers:
-            self.logger.addHandler(handler())
+        self._logger.setLevel(logging.INFO)
+        if not self._logger.handlers:
+            self._logger.addHandler(handler())
 
     """ Download latest event setting configs from the server CDN, and build the required list for script automation. """
     def setup(self):
@@ -84,7 +85,7 @@ class MultiverseDatingManager(NetworkManager):
                                 payload_list.append(payload)
                     self.avg_dict.update({ qa['level']: payload_list })
         else:
-            self.logger.error(f"There's no multiverse event running right now.")
+            self._logger.error(f"There's no multiverse event running right now.")
 
     async def create_user_instance(self, user: UserDocument):
         instance = MultiverseDating(user.doc_id, self.event_id, self.end_time, self.reward_list, self.gift_list, self.machine_list, self.avg_dict)
@@ -101,12 +102,13 @@ class MultiverseDatingManager(NetworkManager):
 
 
 class MultiverseDating(NetworkManager):
+    _logger = logging.getLogger('Clicker 2.5')
+
     def __init__(self, discord_user_id: DiscordID, event_id: int, end_time: int, reward_list, gift_list, machine_list, avg_dict):
         super().__init__()
-        self.logger = logging.getLogger('Clicker 2.5')
-        self.logger.setLevel(logging.INFO)
-        if not self.logger.handlers:
-            self.logger.addHandler(handler())
+        self._logger.setLevel(logging.INFO)
+        if not self._logger.handlers:
+            self._logger.addHandler(handler())
         self.discord_user_id = discord_user_id
         self.event_id = event_id
         self.end_time = end_time
@@ -125,13 +127,15 @@ class MultiverseDating(NetworkManager):
     async def run_loop(self) -> None:
         while self.end_time > int(datetime.now().timestamp()):
             if self.is_sync:
-                # update event records
-                await super().register(self.discord_user_id)
-                await self.claim_energy()
-                await self.auto_dialog()
-                await self.daily_meet()
-                await self.automate_level_rewards()
-                await self.wait_until_next_update()
+                try:
+                    await super().register(self.discord_user_id)
+                    await self.claim_energy()
+                    await self.auto_dialog()
+                    await self.daily_meet()
+                    await self.automate_level_rewards()
+                    await self.wait_until_next_update()
+                except Exception as e:
+                    self._logger.exception(f"(User: {seld.discord_user_id}) encountered process exception: {e}")
             else:
                 await self.on_start()
 
@@ -151,9 +155,9 @@ class MultiverseDating(NetworkManager):
             # update user record
             self.dating_record = resp.response()['user_multiverse_dating_record']
             if i == 0:
-                self.logger.info(f"(User: {self.discord_user_id}) has met 1 time.")
+                self._logger.info(f"(User: {self.discord_user_id}) has met 1 time.")
             else:
-                self.logger.info(f"(User: {self.discord_user_id}) has met {i+1} times.")
+                self._logger.info(f"(User: {self.discord_user_id}) has met {i+1} times.")
 
     """ Claim energy from collect machine """
     async def claim_energy(self) -> None:
@@ -164,9 +168,9 @@ class MultiverseDating(NetworkManager):
             self.dating_record = resp.response()['user_multiverse_dating_record']
             self.energy = resp.updated_item_list()[0]['amount']
             amount = resp.response()['asset_return'][0]['amount']
-            self.logger.info(f"(User: {self.discord_user_id}) collected {amount} energy. energy total: {self.energy}")
+            self._logger.info(f"(User: {self.discord_user_id}) collected {amount} energy. energy total: {self.energy}")
         else:
-            self.logger.error(f"(User: {self.discord_user_id}) failed to collect energy, reason: {resp.error_message()}")
+            self._logger.error(f"(User: {self.discord_user_id}) failed to collect energy, reason: {resp.error_message()}")
     
     """ Check if the user has enough EXP to receive level complete rewards. If eligible level rewards contain upgrade materials, proceed to upgrade collect machine automatically. """
     async def automate_level_rewards(self) -> None:
@@ -180,7 +184,7 @@ class MultiverseDating(NetworkManager):
                 if current_level not in claimed_levels:
                     payload = { 'event_id': self.event_id, 'level': current_level }
                     await self._post(self.api.multiverse_dating.level.claim, payload)
-                    self.logger.info(f"(User: {self.discord_user_id}) claimed (Level: {level_reward['level']}) rewards.")
+                    self._logger.info(f"(User: {self.discord_user_id}) claimed (Level: {level_reward['level']}) rewards.")
                     # only 2, 4, 5 level rewards contain upgrade materials
                     match current_level:
                         case 2:
@@ -224,13 +228,13 @@ class MultiverseDating(NetworkManager):
             cmp_record = self.dating_record()
             self.dating_record = self.response()['user_multiverse_dating_record']
             delta = self.dating_record['exp'] - cmp_record['exp']
-            self.logger.info(f"(User: {self.discord_user_id}) gained {delta} EXP by sending the gift.")
+            self._logger.info(f"(User: {self.discord_user_id}) gained {delta} EXP by sending the gift.")
             remains = resp.reduced_item_list()[0]['amount']
             return remains
         elif resp.error_code() == 11002:
-            self.logger.warning(f"(User: {self.discord_user_id}) does not have any gift (ID: {item_id}).")
+            self._logger.warning(f"(User: {self.discord_user_id}) does not have any gift (ID: {item_id}).")
         else:
-            self.logger.error(f"(User: {self.discord_user_id}) failed to send gift, reason: {resp.error_message()}")
+            self._logger.error(f"(User: {self.discord_user_id}) failed to send gift, reason: {resp.error_message()}")
     
     """ Get the latest event records, return bool. """
     async def fetch_records(self) -> bool:
@@ -238,11 +242,11 @@ class MultiverseDating(NetworkManager):
         if resp.success():
             self.dating_record = resp.dating_record(self.event_id)
             self.dialog_records = resp.dialog_records(self.event_id)
-            self.logger.info(f"(User: {self.discord_user_id}) updated dating record.")
+            self._logger.info(f"(User: {self.discord_user_id}) updated dating record.")
             self._update_duration()
             return True
         else:
-            self.logger.error(f"(User: {self.discord_user_id}) failed to fetch event records, reason: {resp.error_message()}")
+            self._logger.error(f"(User: {self.discord_user_id}) failed to fetch event records, reason: {resp.error_message()}")
             return False
 
     """ Upgrade collect machine """
@@ -253,9 +257,9 @@ class MultiverseDating(NetworkManager):
             # update user record
             self.dating_record = resp.response()['user_multiverse_dating_record']
             self._update_duration()
-            self.logger.info(f"(User: {self.discord_user_id}) upgraded machine to tier {self.dating_record['item_tier']}.")
+            self._logger.info(f"(User: {self.discord_user_id}) upgraded machine to tier {self.dating_record['item_tier']}.")
         else:
-            self.logger.error(f"(User: {self.discord.user_id}) failed to upgrade machine to tier {tier}, reason: {resp.error_message()}")
+            self._logger.error(f"(User: {self.discord.user_id}) failed to upgrade machine to tier {tier}, reason: {resp.error_message()}")
 
     """ Auto complete question by current question ID, return False if something is wrong """
     async def select_answer(self) -> bool:
@@ -274,13 +278,13 @@ class MultiverseDating(NetworkManager):
             self.dating_record = resp.response()['user_multiverse_dating_record']
             self.energy = resp.reduced_item_list()[0]['amount']
             if self.dating_record['exp'] > cmp_record['exp']:
-                self.logger.info(f"(User: {self.discord_user_id}) has answered the dialog successfully! total EXP: {self.dating_record['exp']}, next question ID: {self.dating_record['current_question']}")
+                self._logger.info(f"(User: {self.discord_user_id}) has answered the dialog successfully! total EXP: {self.dating_record['exp']}, next question ID: {self.dating_record['current_question']}")
                 return True
             else:
-                self.logger.warning(f"(User: {self.discord_user_id}) selected the wrong answer! please inform admin to resolve issues.")
+                self._logger.warning(f"(User: {self.discord_user_id}) selected the wrong answer! please inform admin to resolve issues.")
                 return False
         else:
-            self.logger.error(f"(User: {self.discord_user_id}) failed to submit the answer, reason: {resp.error_message()}")
+            self._logger.error(f"(User: {self.discord_user_id}) failed to submit the answer, reason: {resp.error_message()}")
             return False
 
     """ Override get request from NetworkManager to return EventResponse """
@@ -304,7 +308,7 @@ class MultiverseDating(NetworkManager):
         interval = int(self.duration * random.randint(80, 90) / 100)
         next_update_ts = int(datetime.now().timestamp()) + interval
         await self.db.user.set_next_update_timestamp(self.discord_user_id, next_update_ts)
-        self.logger.info(f"(User: {self.discord_user_id}) coroutine starts sleeping for {interval} seconds.")
+        self._logger.info(f"(User: {self.discord_user_id}) coroutine starts sleeping for {interval} seconds.")
         await asyncio.sleep(interval)
 
     def _current_question_cost(self) -> int:
@@ -320,9 +324,9 @@ class MultiverseDating(NetworkManager):
             for machine in self.machine_list:
                 if machine['tier'] == tier:
                     self.duration = machine['max_duration']
-                    self.logger.info(f"(User: {self.discord_user_id}) updated duration to {self.duration} seconds.")
+                    self._logger.info(f"(User: {self.discord_user_id}) updated duration to {self.duration} seconds.")
         except:
-            self.logger.exception(f"(User: {self.discord_user_id}) has not initialised dating record yet!")
+            self._logger.exception(f"(User: {self.discord_user_id}) has not initialised dating record yet!")
 
 
 class EventResponse(Response):
