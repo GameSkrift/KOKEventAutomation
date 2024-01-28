@@ -7,7 +7,6 @@ import io
 import os
 import asyncio
 import aiohttp
-import requests
 from dotenv import load_dotenv
 from zipfile import ZipFile
 from api import GameAPI
@@ -74,79 +73,6 @@ class NetworkManager:
         else:
             self._logger.error(f"(User: {discord_user_id}) failed logging into the game, reason: {acc['error_message']}")
         return None
-
-    """ Fetch the asset list from server and download config file by filename. """
-    def install_config(self, filename) -> dict | None:
-        fpath = None
-        (prefix, asset_list) = self._get_asset_list()
-        for metadata in asset_list:
-            if metadata[0] == filename:
-                fpath = metadata[1]
-                url = f"{prefix}{fpath}"
-                content = requests.get(url).content
-                bytestream = io.BytesIO(content)
-                filename = filename.replace('.zip', '.byte')
-                full_path = os.path.join(CONFIG_DIR, filename)
-                with ZipFile(bytestream, 'r') as zip_ref:
-                    zip_ref.extractall(CONFIG_DIR)
-                    with open(full_path, 'br') as f:
-                        return msgpack.unpackb(f.read(), raw=False, strict_map_key=False)
-        else:
-            self._logger.error(f"Could not find config file with the name {filename}")
-            return None
-
-    """ Download Localization.csv file and return the content. """
-    def get_localization(self) -> str | None:
-        (prefix, asset_list) = self._get_asset_list()
-        for metadata in asset_list:
-            if metadata[0] == 'Localization.csv':
-                url = f"{prefix}{metadata[1]}"
-                csv = requests.get(url).text
-                return csv.split('\n')
-        return None
-
-    """ Download encrypted unity3d assets at destinated file location. """
-    def download_assets(self, keyword, download_dir):
-        resp = self._get_asset_list()
-        (url, asset_list) = self._get_asset_list()
-        if not os.path.exists(download_dir):
-            os.mkdir(download_dir)
-        for metadata in asset_list:
-            if keyword in metadata[0]:
-                uri = f"{url}{metadata[1]}"
-                self._logger.debug(f"Downloading content from {uri}")
-                content = requests.get(uri).content
-                bytestream = io.BytesIO(content)
-                download_path = download_dir.joinpath(metadata[0])
-                self._logger.debug(f"(File: {metadata[0]}) has been downloaded at {download_path}, extracting files ...")
-                if metadata[0].endswith('.zip'):
-                    with ZipFile(bytestream, 'r') as zip_ref:
-                        zip_ref.extractall(download_dir, pwd=PASSWORD.encode('utf-8'))
-                else:
-                    with open(download_path, "wb") as outfile:
-                        # Copy the BytesIO stream to the output file
-                        outfile.write(bytestream.getbuffer())
-
-    """ Download entire game assets at destinated file location. """
-    def download_assets_all(self, download_dir):
-        resp = self._get_asset_list()
-        (url, asset_list) = self._get_asset_list()
-        if not os.path.exists(download_dir):
-            os.mkdir(download_dir)
-        for metadata in asset_list:
-            uri = f"{url}{metadata[1]}"
-            self._logger.debug(f"Downloading content from {uri}")
-            content = requests.get(uri).content
-            bytestream = io.BytesIO(content)
-            download_path = download_dir.joinpath(metadata[0])
-            self._logger.debug(f"(File: {metadata[0]}) has been downloaded at {download_path}, extracting files ...")
-            if metadata[0].endswith('.zip'):
-                with ZipFile(bytestream, 'r') as zip_ref:
-                    zip_ref.extractall(download_dir, pwd=PASSWORD.encode('utf-8'))
-            else:
-                with open(download_path, "wb") as outfile:
-                    # Copy the BytesIO stream to the output file
-                    outfile.write(bytestream.getbuffer())
 
     """ Send asynchronous GET request by providing the API name and discord user ID. """
     async def get(self, api_name: GameAPI, discord_user_id: DiscordID, q=None, event_id=None, battle_id=None) -> dict | None:
@@ -233,26 +159,6 @@ class NetworkManager:
             nutaku_id = user.get_nutaku_id()
             uri = { 'nutaku_id': nutaku_id, 'user_id': user_id, 'prefix': prefix }
             return uri
-
-    def _get_asset_list(self) -> (str, list):
-        url = "{}/api/system/assets?asset_v=0&device_type=web".format(self.api.data_url)
-        r = requests.get(url).json()
-        return (r['response']['download_url'], r['response']['assets']['asset_patchs'])
-
-    def get_asset_list_by_version(self, version: int) -> list:
-        url = "{}/api/system/assets?asset_v={}&device_type=web".format(self.api.data_url, version)
-        r = requests.get(url).json()
-        return r['response']['assets']['asset_patchs']
-
-    def get_secret_asset_list_by_version(self, version: int) -> list:
-        url = "{}/api/system/assets?asset_v={}&device_type=websecret".format(self.api.data_url, version)
-        r = requests.get(url).json()
-        return r['response']['assets']['asset_patchs']
-
-    def get_odd_list_by_version(self, version: int) -> list:
-        url = "{}/api/system/assets?asset_v={}&device_type=webodd".format(self.api.data_url, version)
-        r = requests.get(url).json()
-        return r['response']['assets']['asset_patchs']
 
 
 class Response(dict):
