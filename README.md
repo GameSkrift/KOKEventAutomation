@@ -1,5 +1,6 @@
 # King of Kinks Event Automation
 
+[![mspv](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![discord](https://img.shields.io/discord/565048515357835264.svg?logo=discord&colorB=7289DA&label=discord)](https://discord.gg/eSustM8e5q)
 [![ko-fi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/sheruost)
 
@@ -9,7 +10,7 @@ TODO
 
 ## Features
 
-- Clicker 2 Event: `SexualDating.py
+- Clicker 2 Event: `SexualDating.py`
     - [x] Collect wine item from player brewer at **80~90% capacity**.
     - [x] Upgrade player brewer if available.
     - [x] Perform clickers by consuming all available wine items each time.
