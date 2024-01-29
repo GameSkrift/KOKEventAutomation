@@ -101,29 +101,30 @@ class BaseEventManager(Database):
         """
         raise NotImplementedError()
 
-    async def run(self):
+    async def run(self, semaphore=asyncio.Semaphore(10)):
         """
         Main entry for all customised EventManager coroutines
         """
         while self.end_time > int(datetime.now().timestamp()):
             (new_users, delete_users) = await self._maintain_users()
-            await self._start_new_instances(new_users)
+            await self._start_new_instances(new_users, semaphore)
             self._delete_running_instances(delete_users)
             # sleep for (default=60) seconds
             await asyncio.sleep(self._interval)
 
     """ Create and start running user coroutines by ``asyncio.create_task`` """
-    async def _start_new_instances(self, new_users: list[DiscordID]) -> None:
+    async def _start_new_instances(self, new_users: list[DiscordID], semaphore) -> None:
         for user in new_users:
-            new_event = await self.create_user_instance(user)
-            await new_event.on_start()
-            new_instance = asyncio.create_task(new_event.run_loop())
-            discord_id = user.doc_id
-            # append corountine with matched DiscordID
-            if discord_id not in self._coroutines.keys():
-                new_record = { discord_id: new_instance }
-                self._coroutines.update(new_record)
-                self._running_users.add(user)
+            async with semaphore:
+                new_event = await self.create_user_instance(user)
+                await new_event.on_start()
+                new_instance = asyncio.create_task(new_event.run_loop())
+                discord_id = user.doc_id
+                # append corountine with matched DiscordID
+                if discord_id not in self._coroutines.keys():
+                    new_record = { discord_id: new_instance }
+                    self._coroutines.update(new_record)
+                    self._running_users.add(user)
 
     """ Cancel running coroutines matched by DiscordID, then delete entry from ``self._running_users`` """
     def _delete_running_instances(self, delete_users: list[DiscordID]) -> None:
@@ -147,4 +148,5 @@ class BaseEventManager(Database):
         else:
             new_users = set(from_table)
             self._running_users = new_users
+
         return (new_users, delete_users)
