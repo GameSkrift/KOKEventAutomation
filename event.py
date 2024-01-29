@@ -62,10 +62,10 @@ class BaseEventManager(Database):
     _running_users: set[UserDocument] = set()
     _coroutines: dict[DiscordID, Coroutine] = dict()
     
-    def __init__(self, config: str, filepath=LOCAL_STORAGE, sync_secs=60):
+    def __init__(self, config: str, filepath=LOCAL_STORAGE, interval=10):
         super().__init__(filepath)
         self.config = config
-        self._sync_secs = sync_secs
+        self._interval = interval
     
     @abstractmethod
     async def build_event_config(self):
@@ -84,31 +84,44 @@ class BaseEventManager(Database):
     """ Main entry for all customised EventManager coroutines """
     async def run(self):
         while self.end_time > int(datetime.now().timestamp()):
-            async with asyncio.TaskGroup() as tg:
-                (new_users, delete_users) = await self._maintain_users()
-                for user in new_users:
-                    new_instance = await self.create_user_instance(user)
-                    event = new_instance.run_loop()
-                    # append corountine with matched discord User ID
-                    if user.doc_id not in self._coroutines.keys(): 
-                        kv = { user.doc_id: event }
-                        self._coroutines.update(kv)
-                        tg.create_task(event)
-                for user in delete_users:
-                    if user.doc_id in self._coroutines.keys():
-                        self._coroutines[user.doc_id].close()
+            (new_users, delete_users) = await self._maintain_users()
+            await self._start_new_instances(new_users)
+            self._delete_running_instances(delete_users)
 
-            await asyncio.sleep(self._sync_secs)
+            await asyncio.sleep(self._interval)
+
+    """ Create and start running user coroutines by ``asyncio.create_task`` """
+    async def _start_new_instances(self, new_users: list[DiscordID]) -> None:
+        for user in new_users:
+            new_instance = await self.create_user_instance(user)
+            new_event = asyncio.create_task(new_instance.run_loop())
+            discord_id = user.doc_id
+            # append corountine with matched DiscordID
+            if discord_id not in self._coroutines.keys():
+                new_record = { discord_id: new_event }
+                self._coroutines.update(new_record)
+                print(self._coroutines.keys())
+                self._running_users.add(user)
+
+    """ Cancel running coroutines matched by DiscordID, then delete entry from ``self._running_users`` """
+    def _delete_running_instances(self, delete_users: list[DiscordID]) -> None:
+        for user in delete_users:
+            delete_discord_id = user.doc_id
+            if delete_discord_id in self._coroutines.keys():
+                on_cancel_event = self._coroutines.pop(delete_discord_id)
+                on_cancel_event.cancel()
+                self._running_users.discard(user)
                     
     """ Maintain local hash set of running instances by comparing to table users, returns a tuple of new and deleted user sets"""
     async def _maintain_users(self) -> (set[UserDocument], set[UserDocument]):
         new_users = delete_users = set()
         from_table = await self.user.get_all_users()
         if self._running_users:
-            new_users = set(from_table).difference(self._user_list)
+            new_users = set(from_table).difference(self._running_users)
             delete_users = self._running_users.difference(set(from_table))
-            # sync local _running_users to user table storage
-            self._running_users.update(new_users).symmetric_difference_update(delete_users)   
+            # sync local _running_users hash set with user table storage
+            self._running_users.update(new_users)
+            self._running_users.symmetric_difference_update(delete_users)
         else:
             new_users = set(from_table)
             self._running_users = new_users
