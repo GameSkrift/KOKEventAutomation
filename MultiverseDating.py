@@ -6,9 +6,10 @@ import asyncio
 import random
 from datetime import datetime
 from contextlib import suppress
+from typing import override
 from network import NetworkManager, Response
-from event import BaseConfig, BaseEventManager
-from storage import Database, UserDocument, DiscordID
+from event import BaseConfig, BaseEventManager, BaseEvent
+from storage import Database, UserDocument, DiscordID, LOCAL_STORAGE
 
 def handler():
     handler = logging.StreamHandler()
@@ -27,8 +28,11 @@ class MultiverseDatingManager(BaseEventManager):
         if not self._logger.handlers:
             self._logger.addHandler(handler())
 
-    """ Download latest event setting configs from the server CDN, and build the required list for script automation. """
+    @override
     async def build_event_config(self):
+        """
+        Download latest event setting configs from the server CDN, and build the required list for script automation.
+        """
         config = await BaseConfig(self.config).get_dict()
         now_ts = int(datetime.now().timestamp())
         # Retrieve event_id
@@ -85,13 +89,14 @@ class MultiverseDatingManager(BaseEventManager):
         else:
             self._logger.error(f"There's no multiverse event running right now.")
 
+    @override
     async def create_user_instance(self, user: UserDocument):
+        #OPTIONAL: can import setting dictionaries in a setup functiom for clean code.
         instance = MultiverseDating(user.doc_id, self.event_id, self.end_time, self.reward_list, self.gift_list, self.machine_list, self.avg_dict)
-        await instance.on_start()
         return instance
 
 
-class MultiverseDating(NetworkManager):
+class MultiverseDating(BaseEvent):
     _logger = logging.getLogger('Clicker 2.5')
 
     def __init__(self, discord_user_id: DiscordID, event_id: int, end_time: int, reward_list, gift_list, machine_list, avg_dict):
@@ -110,6 +115,7 @@ class MultiverseDating(NetworkManager):
         self.duration = 0
         self.is_sync = False
 
+    @override
     async def on_start(self) -> None:
         try:
             await super().register(self.discord_user_id)
@@ -117,6 +123,7 @@ class MultiverseDating(NetworkManager):
         except Exception as e:
             self._logger.exception(f"(User: {self.discord_user_id}) failed to setup the instance, please report this issue to moderators!")
 
+    @override
     async def run_loop(self) -> None:
         if self.is_sync:
             while self.end_time > int(datetime.now().timestamp()):
