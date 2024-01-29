@@ -80,7 +80,7 @@ class UserDocument(dict, BaseDocument):
         self.doc_id = doc_id
 
     def __hash__(self) -> int:
-        return object.__hash__(self)
+        return hash((self.doc_id, self.get_user_id()))
 
     @property
     def doc_id(self) -> DiscordID:
