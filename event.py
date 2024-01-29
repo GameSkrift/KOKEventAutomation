@@ -10,10 +10,10 @@ from zipfile import ZipFile
 from datetime import datetime
 from abc import abstractmethod
 from typing import Coroutine
-from network import CONFIG_DIR
+from network import NetworkManager, CONFIG_DIR
 from storage import Database, UserDocument, DiscordID, LOCAL_STORAGE
 
-__all__ = ('BaseConfig', 'BaseEventManager')
+__all__ = ('BaseConfig', 'BaseEvent', 'BaseEventManager')
 
 class BaseConfig:
     _logger = logging.getLogger(__name__)
@@ -58,11 +58,30 @@ class BaseConfig:
         return None
 
 
+class BaseEvent(NetworkManager):
+    def __init__(self, *, filepath=LOCAL_STORAGE):
+        super().__init__(filepath)
+
+    @abstractmethod
+    async def on_start(self) -> None:
+        """
+        This is where we initialise player event record from ``record?`` GET request after event [setup](optional)
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def run_loop(self) -> None:
+        """
+        This is where you put automation servies after awaiting ``self.on_start()``
+        """
+        raise NotImplementedError()
+
+
 class BaseEventManager(Database):
     _running_users: set[UserDocument] = set()
     _coroutines: dict[DiscordID, Coroutine] = dict()
     
-    def __init__(self, config: str, filepath=LOCAL_STORAGE, interval=10):
+    def __init__(self, config: str, filepath=LOCAL_STORAGE, interval=60):
         super().__init__(filepath)
         self.config = config
         self._interval = interval
@@ -75,32 +94,35 @@ class BaseEventManager(Database):
         raise NotImplementedError()
 
     @abstractmethod
-    async def create_user_instance(self, user: UserDocument):
+    async def create_user_instance(self, user: UserDocument) -> BaseEvent:
         """
-        This is where you initialise customised event class with setup function (if any)
+        This is where you initialise customised event class with event [setup](optional)
+        It must return initialised custom event class to proceed with ``user_instance.on_start()``
         """
         raise NotImplementedError()
 
-    """ Main entry for all customised EventManager coroutines """
     async def run(self):
+        """
+        Main entry for all customised EventManager coroutines
+        """
         while self.end_time > int(datetime.now().timestamp()):
             (new_users, delete_users) = await self._maintain_users()
             await self._start_new_instances(new_users)
             self._delete_running_instances(delete_users)
-
+            # sleep for (default=60) seconds
             await asyncio.sleep(self._interval)
 
     """ Create and start running user coroutines by ``asyncio.create_task`` """
     async def _start_new_instances(self, new_users: list[DiscordID]) -> None:
         for user in new_users:
-            new_instance = await self.create_user_instance(user)
-            new_event = asyncio.create_task(new_instance.run_loop())
+            new_event = await self.create_user_instance(user)
+            await new_event.on_start()
+            new_instance = asyncio.create_task(new_event.run_loop())
             discord_id = user.doc_id
             # append corountine with matched DiscordID
             if discord_id not in self._coroutines.keys():
-                new_record = { discord_id: new_event }
+                new_record = { discord_id: new_instance }
                 self._coroutines.update(new_record)
-                print(self._coroutines.keys())
                 self._running_users.add(user)
 
     """ Cancel running coroutines matched by DiscordID, then delete entry from ``self._running_users`` """
