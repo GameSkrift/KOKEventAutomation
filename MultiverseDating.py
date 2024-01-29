@@ -9,7 +9,7 @@ from contextlib import suppress
 from typing import override
 from network import NetworkManager, Response
 from event import BaseConfig, BaseEventManager, BaseEvent
-from storage import Database, UserDocument, DiscordID, LOCAL_STORAGE
+from storage import Database, UserDocument, DiscordID
 
 def handler():
     handler = logging.StreamHandler()
@@ -140,16 +140,18 @@ class MultiverseDating(BaseEvent):
                 else:
                     await super().register(self.discord_user_id)
                     await self.claim_energy()
+                    await self.wait_until_next_update()
 
     """ Complete event dialogues if player energy sufficient. """
-    async def auto_dialog(self):
+    async def auto_dialog(self) -> None:
         await self.fetch_records()
-        while self.energy >= self._current_question_cost():
+        cost = self._current_question_cost()
+        while self.energy >= cost and cost != 0:
             if not await self.select_answer():
-                 break
+                return None
 
     """ Complete all daily meet attempts at once """
-    async def daily_meet(self):
+    async def daily_meet(self) -> None:
         meet_count = self.dating_record['meet_count']
         payload = { 'event_id': self.event_id }
         for i in range(10 - meet_count):
@@ -272,7 +274,6 @@ class MultiverseDating(BaseEvent):
                 select_id = qa['select_id']
                 cost = qa['cost']
                 break
-
         payload = { 'event_id': self.event_id, 'select_id': select_id, 'cost': cost }
         resp = await self._post(self.api.multiverse_dating.select, payload)
         if resp.success():
@@ -320,18 +321,21 @@ class MultiverseDating(BaseEvent):
 
     def _current_question_cost(self) -> int:
         level = self.dating_record['level']
+        if level == 0:
+            return 0
         question_id = self.dating_record['current_question']
         for qa in self.avg_dict[level]:
             if qa['question_id'] == question_id:
                 return json.loads(qa['cost'])[0]['amount']
     
-    def _update_duration(self):
+    def _update_duration(self) -> None:
         try:
             tier = self.dating_record['item_tier']
             for machine in self.machine_list:
                 if machine['tier'] == tier:
                     self.duration = machine['max_duration']
                     self._logger.info(f"(User: {self.discord_user_id}) updated duration to {self.duration} seconds.")
+                    return None
         except:
             self._logger.exception(f"(User: {self.discord_user_id}) has not initialised dating record yet!")
 
