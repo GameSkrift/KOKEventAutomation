@@ -144,11 +144,11 @@ class MultiverseDating(BaseEvent):
 
     """ Complete event dialogues if player energy sufficient. """
     async def auto_dialog(self) -> None:
-        await self.fetch_records()
-        cost = self._current_question_cost()
-        while self.energy >= cost and cost != 0:
-            if not await self.select_answer():
-                return None
+        if await self.fetch_records():
+            cost = self._current_question_cost()
+            while self.energy >= cost and cost != 0:
+                if not await self.select_answer():
+                    return None
 
     """ Complete all daily meet attempts at once """
     async def daily_meet(self) -> None:
@@ -178,7 +178,8 @@ class MultiverseDating(BaseEvent):
     
     """ Check if the user has enough EXP to receive level complete rewards. If eligible level rewards contain upgrade materials, proceed to upgrade collect machine automatically. """
     async def automate_level_rewards(self) -> None:
-        await self.fetch_records()
+        if not await self.fetch_records():
+            return None
         claimed_levels = self.dating_record['claim_reward_level']
         current_level = self.dating_record['level']
         for level_reward in self.reward_list:
