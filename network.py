@@ -150,8 +150,8 @@ class NetworkManager:
                 uri = { 'user_id': user_id, 'prefix': prefix, 'session_id': session_id, 'guild_id': guild_id }
                 return uri
             else:
-                reason = f"(User: {discord_user_id}) has not logged into server yet!"
-                raise Exception(reason)
+                self._logger.exception(f"(User: {discord_user_id}) has not logged into server yet!")
+                raise TypeError
         else:
             nutaku_id = user.get_nutaku_id()
             uri = { 'nutaku_id': nutaku_id, 'user_id': user_id, 'prefix': prefix }

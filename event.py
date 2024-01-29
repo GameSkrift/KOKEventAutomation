@@ -94,10 +94,11 @@ class BaseEventManager(Database):
         raise NotImplementedError()
 
     @abstractmethod
-    async def create_user_instance(self, user: UserDocument) -> BaseEvent:
+    def create_user_instance(self, user: UserDocument) -> BaseEvent:
         """
         This is where you initialise customised event class with event [setup](optional)
-        It must return initialised custom event class to proceed with ``user_instance.on_start()``
+
+        NOTE: It must return initialised custom event class to proceed with ``user_instance.on_start()``
         """
         raise NotImplementedError()
 
@@ -116,7 +117,8 @@ class BaseEventManager(Database):
     async def _start_new_instances(self, new_users: list[DiscordID], semaphore) -> None:
         for user in new_users:
             async with semaphore:
-                new_event = await self.create_user_instance(user)
+                new_event = self.create_user_instance(user)
+                #TODO: try to at least ensure on_start()
                 await new_event.on_start()
                 new_instance = asyncio.create_task(new_event.run_loop())
                 discord_id = user.doc_id
