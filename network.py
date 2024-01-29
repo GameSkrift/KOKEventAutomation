@@ -66,9 +66,9 @@ class NetworkManager:
                 me = user.me()
                 return { 'user_id': me['user_id'], 'name': me['display_name'], 'session_id': session_id, 'socket_token': user.response()['socket_token'], 'last_login_time': me['last_login_time'] }
             else:
-                self._logger.error(f"(User: {discord_user_id}) failed logging into the game, reason: {user['error_message']}")
+                self._logger.error(f"(User: {discord_user_id}) failed logging into the game, reason: {user.error_message()}")
         else:
-            self._logger.error(f"(User: {discord_user_id}) failed logging into the game, reason: {acc['error_message']}")
+            self._logger.error(f"(User: {discord_user_id}) failed logging into the game, reason: {acc.error_message()}")
         return None
 
     """ Send asynchronous GET request by providing the API name and discord user ID. """

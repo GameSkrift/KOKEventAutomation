@@ -111,8 +111,11 @@ class MultiverseDating(NetworkManager):
         self.is_sync = False
 
     async def on_start(self) -> None:
-        await super().register(self.discord_user_id)
-        self.is_sync = await self.fetch_records()
+        try:
+            await super().register(self.discord_user_id)
+            self.is_sync = await self.fetch_records()
+        except Exception as e:
+            self._logger.exception(f"(User: {self.discord_user_id}) failed to setup the instance, please report this issue to moderators!")
 
     async def run_loop(self) -> None:
         if self.is_sync:
