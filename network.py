@@ -8,7 +8,7 @@ import aiohttp
 from dotenv import load_dotenv
 from zipfile import ZipFile
 from api import GameAPI
-from storage import Database, DiscordID
+from storage import Database, DiscordID, LOCAL_STORAGE
 
 load_dotenv()
 CONFIG_DIR = os.environ["CONFIG_DIR"]
@@ -25,9 +25,9 @@ def handler():
 class NetworkManager:
     _logger = logging.getLogger('NetworkManager')
 
-    def __init__(self):
+    def __init__(self, filepath=LOCAL_STORAGE):
         self.api = GameAPI()
-        self.db = Database()
+        self.db = Database(filepath)
         self._logger.setLevel(logging.INFO)
         if not self._logger.handlers:
             self._logger.addHandler(handler())
@@ -45,13 +45,13 @@ class NetworkManager:
                 await self.db.user.update_session_id(discord_user_id, session_id)
             else:
                 await self.db.user.update_user(discord_user_id, int(me['user_id']), me['display_name'], session_id, socket_token, int(me['last_login_time']))
-            self._logger.info(f"(User: {discord_user_id}) has updated new session_id ({session_id})")
+            self._logger.debug(f"(User: {discord_user_id}) has updated new session_id ({session_id})")
         else:
             nutaku_id = user.get_nutaku_id()
             info = await self.login(discord_user_id, nutaku_id, prefix)
             if info:
                 await self.db.user.update_user(discord_user_id, int(info['user_id']), info['name'], info['session_id'], info['socket_token'], int(info['last_login_time']))
-                self._logger.info(f"(User: {discord_user_id}) has updated new session_id ({info['session_id']})")
+                self._logger.debug(f"(User: {discord_user_id}) has updated new session_id ({info['session_id']})")
         # ensure that the new session has flushed into disk
         await asyncio.sleep(1)
 
