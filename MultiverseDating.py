@@ -134,19 +134,20 @@ class MultiverseDating(BaseEvent):
                         await self.auto_dialog()
                         await self.daily_meet()
                         await self.automate_level_rewards()
-                        await self.wait_until_next_update()
                     except Exception as e:
                         self._logger.exception(f"(User: {self.discord_user_id}) encountered process exception: {e}")
                 else:
                     await super().register(self.discord_user_id)
                     await self.claim_energy()
-                    await self.wait_until_next_update()
+                await self.wait_until_next_update()
 
     """ Complete event dialogues if player energy sufficient. """
     async def auto_dialog(self) -> None:
-        if await self.fetch_records():
-            cost = self._current_question_cost()
-            while self.energy >= cost and cost != 0:
+        if not await self.fetch_records():
+            return None
+        cost = self._current_question_cost()
+        if cost:
+            while self.energy > cost:
                 if not await self.select_answer():
                     return None
 
