@@ -213,6 +213,14 @@ class Database(TinyDB):
             new_ts = self._get_current_timestamp()
             await self.update({ 'session_id': session_id, 'last_update': new_ts, 'last_session_update': new_ts }, doc_ids=[key])
 
+        async def set_premium(self, key: DiscordID) -> None:
+            new_ts = self._get_current_timestamp()
+            await self.update({ 'premium': True, 'last_update': new_ts }, doc_ids=[key])
+
+        async def set_regular(self, key: DiscordID) -> None:
+            new_ts = self._get_current_timestamp()
+            await self.update({ 'premium': False, 'last_update': new_ts }, doc_ids=[key])
+
         async def set_next_update_timestamp(self, key: DiscordID, next_ts: int) -> None:
             new_ts = self._get_current_timestamp()
             await self.update({ 'last_update': new_ts, 'next_update': next_ts }, doc_ids=[key])
