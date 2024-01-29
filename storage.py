@@ -100,6 +100,9 @@ class UserDocument(dict, BaseDocument):
     def is_premium(self) -> bool:
         return self['premium']
 
+    def is_regular(self) -> bool:
+        return not self.is_premium()
+
     def is_bot(self) -> bool:
         return self['bot']
 
@@ -157,6 +160,7 @@ class Database(TinyDB):
         def __init__(self, storage):
             #TODO: change default isolevel, refers to https://github.com/VermiIIi0n/async-tinydb/issues/12
             super().__init__(storage, "user", no_dbcache=True, document_id_class=DiscordID, document_class=UserDocument)
+            self._iso_level = 2
 
         async def create(self, key: DiscordID, user_id: int, nutaku_id: int = None, premium=False, bot=False):
             new_ts = self._get_current_timestamp()
@@ -174,6 +178,14 @@ class Database(TinyDB):
 
         async def get_all_users(self) -> list[UserDocument]:
             users = await self.all()
+            return list(UserDocument(user, user.doc_id) for user in users)
+
+        async def get_premium_users(self) -> list[UserDocument]:
+            users = await self.search(RECORD.premium == True)
+            return list(UserDocument(user, user.doc_id) for user in users)
+
+        async def get_regular_users(self) -> list[UserDocument]:
+            users = await self.search(RECORD.premium == False)
             return list(UserDocument(user, user.doc_id) for user in users)
 
         async def get_next_update_users(self) -> list[UserDocument]:
