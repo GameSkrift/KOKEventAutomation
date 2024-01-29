@@ -90,7 +90,7 @@ class MultiverseDatingManager(BaseEventManager):
             self._logger.error(f"There's no multiverse event running right now.")
 
     @override
-    async def create_user_instance(self, user: UserDocument):
+    def create_user_instance(self, user: UserDocument):
         #OPTIONAL: can import setting dictionaries in a setup functiom for clean code.
         instance = MultiverseDating(user.doc_id, self.event_id, self.end_time, self.reward_list, self.gift_list, self.machine_list, self.avg_dict)
         return instance
@@ -121,7 +121,7 @@ class MultiverseDating(BaseEvent):
             await super().register(self.discord_user_id)
             self.is_sync = await self.fetch_records()
         except Exception as e:
-            self._logger.exception(f"(User: {self.discord_user_id}) failed to setup the instance, please report this issue to moderators!")
+            self._logger.exception(f"(User: {self.discord_user_id}) failed to launch the instance on cold start, we gonna try catching up on next sleeping cycle ...")
 
     @override
     async def run_loop(self) -> None:
