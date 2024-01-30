@@ -158,9 +158,9 @@ class MultiverseDating(BaseEvent):
             # update user record
             self.dating_record = resp.response()['user_multiverse_dating_record']
             if i == 0:
-                self._logger.info(f"(User: {self.discord_user_id}) has met 1 time.")
+                self._logger.debug(f"(User: {self.discord_user_id}) has met 1 time.")
             else:
-                self._logger.info(f"(User: {self.discord_user_id}) has met {i+1} times.")
+                self._logger.debug(f"(User: {self.discord_user_id}) has met {i+1} times.")
 
     """ Claim energy from collect machine """
     async def claim_energy(self) -> None:
@@ -171,7 +171,7 @@ class MultiverseDating(BaseEvent):
             self.dating_record = resp.response()['user_multiverse_dating_record']
             self.energy = resp.updated_item_list()[0]['amount']
             amount = resp.response()['asset_return'][0]['amount']
-            self._logger.info(f"(User: {self.discord_user_id}) collected {amount} energy. energy total: {self.energy}")
+            self._logger.debug(f"(User: {self.discord_user_id}) collected {amount} energy. energy total: {self.energy}")
         else:
             self._logger.error(f"(User: {self.discord_user_id}) failed to collect energy, reason: {resp.error_message()}")
     
@@ -188,7 +188,7 @@ class MultiverseDating(BaseEvent):
                 if current_level not in claimed_levels:
                     payload = { 'event_id': self.event_id, 'level': current_level }
                     await self._post(self.api.multiverse_dating.level.claim, payload)
-                    self._logger.info(f"(User: {self.discord_user_id}) claimed (Level: {level_reward['level']}) rewards.")
+                    self._logger.debug(f"(User: {self.discord_user_id}) claimed (Level: {level_reward['level']}) rewards.")
                     # only 2, 4, 5 level rewards contain upgrade materials
                     match current_level:
                         case 2:
@@ -232,7 +232,7 @@ class MultiverseDating(BaseEvent):
             cmp_record = self.dating_record()
             self.dating_record = self.response()['user_multiverse_dating_record']
             delta = self.dating_record['exp'] - cmp_record['exp']
-            self._logger.info(f"(User: {self.discord_user_id}) gained {delta} EXP by sending the gift.")
+            self._logger.debug(f"(User: {self.discord_user_id}) gained {delta} EXP by sending the gift.")
             remains = resp.reduced_item_list()[0]['amount']
             return remains
         elif resp.error_code() == 11002:
@@ -246,7 +246,7 @@ class MultiverseDating(BaseEvent):
         if resp.success():
             self.dating_record = resp.dating_record(self.event_id)
             self.dialog_records = resp.dialog_records(self.event_id)
-            self._logger.info(f"(User: {self.discord_user_id}) updated dating record.")
+            self._logger.debug(f"(User: {self.discord_user_id}) updated dating record.")
             self._update_duration()
             return True
         else:
@@ -281,7 +281,7 @@ class MultiverseDating(BaseEvent):
             self.dating_record = resp.response()['user_multiverse_dating_record']
             self.energy = resp.reduced_item_list()[0]['amount']
             if self.dating_record['exp'] > cmp_record['exp']:
-                self._logger.info(f"(User: {self.discord_user_id}) has answered the dialog successfully! total EXP: {self.dating_record['exp']}, next question ID: {self.dating_record['current_question']}")
+                self._logger.debug(f"(User: {self.discord_user_id}) has answered the dialog successfully! total EXP: {self.dating_record['exp']}, next question ID: {self.dating_record['current_question']}")
                 return True
             else:
                 self._logger.warning(f"(User: {self.discord_user_id}) selected the wrong answer! please inform admin to resolve issues.")
@@ -334,7 +334,7 @@ class MultiverseDating(BaseEvent):
             for machine in self.machine_list:
                 if machine['tier'] == tier:
                     self.duration = machine['max_duration']
-                    self._logger.info(f"(User: {self.discord_user_id}) updated duration to {self.duration} seconds.")
+                    self._logger.debug(f"(User: {self.discord_user_id}) updated duration to {self.duration} seconds.")
                     return None
         except:
             self._logger.exception(f"(User: {self.discord_user_id}) has not initialised dating record yet!")
