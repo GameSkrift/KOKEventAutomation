@@ -74,7 +74,7 @@ class BaseEvent(NetworkManager):
     @abstractmethod
     async def run_loop(self) -> None:
         """
-        This is where you put automation servies after awaiting ``self.on_start()``
+        This is where you put automation services after awaiting ``self.on_start()``
         """
         raise NotImplementedError()
 
