@@ -117,11 +117,9 @@ class MultiverseDating(BaseEvent):
 
     @override
     async def on_start(self) -> None:
-        try:
-            await super().register(self.discord_user_id)
-            self.is_sync = await self.fetch_records()
-        except Exception as e:
-            self._logger.exception(f"(User: {self.discord_user_id}) failed to launch the instance on cold start, we gonna try catching up on next sleeping cycle ...")
+        # the event manager will deal with exception.
+        await super().register(self.discord_user_id)
+        self.is_sync = await self.fetch_records()
 
     @override
     async def run_loop(self) -> None:

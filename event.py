@@ -66,6 +66,8 @@ class BaseEvent(NetworkManager):
     async def on_start(self) -> None:
         """
         This is where we initialise player event record from ``record?`` GET request after event [setup](optional)
+
+        NOTE: Do not catch any exception in this method, the event manager will catch the on_start exception instead.
         """
         raise NotImplementedError()
 
@@ -78,10 +80,11 @@ class BaseEvent(NetworkManager):
 
 
 class BaseEventManager(Database):
+    _logger: logging.getLogger(__name__)
     _running_users: set[UserDocument] = set()
     _coroutines: dict[DiscordID, Coroutine] = dict()
     
-    def __init__(self, config: str, filepath=LOCAL_STORAGE, interval=60):
+    def __init__(self, config: str, filepath=LOCAL_STORAGE, interval=300):
         super().__init__(filepath)
         self.config = config
         self._interval = interval
@@ -113,23 +116,30 @@ class BaseEventManager(Database):
             # sleep for (default=60) seconds
             await asyncio.sleep(self._interval)
 
-    """ Create and start running user coroutines by ``asyncio.create_task`` """
     async def _start_new_instances(self, new_users: list[DiscordID], semaphore) -> None:
+        """
+        Create and start running user coroutines by ``asyncio.create_task``.
+        Ff the event ``on_start()`` failed, drop the instance and wait for next ``self._interval``
+        """
         for user in new_users:
             async with semaphore:
-                new_event = self.create_user_instance(user)
-                #TODO: try to at least ensure on_start()
-                await new_event.on_start()
-                new_instance = asyncio.create_task(new_event.run_loop())
-                discord_id = user.doc_id
-                # append corountine with matched DiscordID
-                if discord_id not in self._coroutines.keys():
-                    new_record = { discord_id: new_instance }
-                    self._coroutines.update(new_record)
-                    self._running_users.add(user)
+                try:
+                    new_event = self.create_user_instance(user)
+                    await new_event.on_start()
+                    new_instance = asyncio.create_task(new_event.run_loop())
+                    discord_id = user.doc_id
+                    # append corountine with matched DiscordID
+                    if discord_id not in self._coroutines.keys():
+                        new_record = { discord_id: new_instance }
+                        self._coroutines.update(new_record)
+                        self._running_users.add(user)
+                except Exception as e:
+                    self._logger.exception(f"(User: {self.discord_user_id}) failed to launch the instance on cold start, exception: {e}")
 
-    """ Cancel running coroutines matched by DiscordID, then delete entry from ``self._running_users`` """
     def _delete_running_instances(self, delete_users: list[DiscordID]) -> None:
+        """
+        Cancel running coroutines matched by DiscordID, then delete entry from ``self._running_users``
+        """
         for user in delete_users:
             delete_discord_id = user.doc_id
             if delete_discord_id in self._coroutines.keys():
@@ -137,8 +147,10 @@ class BaseEventManager(Database):
                 on_cancel_event.cancel()
                 self._running_users.discard(user)
                     
-    """ Maintain local hash set of running instances by comparing to table users, returns a tuple of new and deleted user sets"""
     async def _maintain_users(self) -> (set[UserDocument], set[UserDocument]):
+        """
+        Maintain local hash set of running instances by comparing to table users, returns a tuple of new and deleted user sets
+        """
         new_users = delete_users = set()
         from_table = await self.user.get_all_users()
         if self._running_users:
