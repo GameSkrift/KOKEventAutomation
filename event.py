@@ -84,7 +84,7 @@ class BaseEventManager(Database):
     _running_users: set[DiscordID] = set()
     _coroutines: dict[DiscordID, Coroutine] = dict()
     
-    def __init__(self, config: str, filepath=LOCAL_STORAGE, interval=60):
+    def __init__(self, config: str, filepath=LOCAL_STORAGE, interval=300):
         super().__init__(filepath)
         self.config = config
         self._interval = interval
@@ -161,6 +161,6 @@ class BaseEventManager(Database):
             self._running_users.update(new_users)
             self._running_users.difference_update(delete_users)
         else:
-            self._running_users = sync_ids
+            self._running_users = new_users = sync_ids
 
         return (new_users, delete_users)
