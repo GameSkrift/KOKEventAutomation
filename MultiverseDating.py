@@ -229,7 +229,7 @@ class MultiverseDating(BaseEvent):
         payload = { 'event_id': self.event_id, 'item_id': item_id }
         resp = await self._post(self.api.multiverse_dating.gift, payload)
         if resp.success():
-            cmp_record = self.dating_record()
+            cmp_record = self.dating_record
             self.dating_record = self.response()['user_multiverse_dating_record']
             delta = self.dating_record['exp'] - cmp_record['exp']
             self._logger.debug(f"(User: {self.discord_user_id}) gained {delta} EXP by sending the gift.")
