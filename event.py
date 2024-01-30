@@ -128,6 +128,7 @@ class BaseEventManager(Database):
                     await new_event.on_start()
                     new_instance = asyncio.create_task(new_event.run_loop())
                     # append corountine with matched DiscordID
+                    self._running_users.add(discord_id)
                     if discord_id not in self._coroutines.keys():
                         new_record = { discord_id: new_instance }
                         self._coroutines.update(new_record)
@@ -139,6 +140,7 @@ class BaseEventManager(Database):
         Cancel running coroutines matched by DiscordID, then delete entry from ``self._running_users``
         """
         for discord_id in delete_users:
+            self._running_users.discard(discord_id)
             if discord_id in self._coroutines.keys():
                 on_cancel_event = self._coroutines.pop(discord_id)
                 on_cancel_event.cancel()
@@ -156,9 +158,7 @@ class BaseEventManager(Database):
             self._logger.debug(f"Adding {len(new_users)} new subscribers ...")
             self._logger.debug(f"Removing {len(delete_users)} subscribers ...")
             # sync local _running_users hash set with user table storage
-            self._running_users.update(new_users)
-            self._running_users.difference_update(delete_users)
         else:
-            self._running_users = new_users = sync_ids
+            new_users = sync_ids
 
         return (new_users, delete_users)
