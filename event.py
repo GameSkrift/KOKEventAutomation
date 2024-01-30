@@ -127,12 +127,11 @@ class BaseEventManager(Database):
                     new_event = self.create_user_instance(user)
                     await new_event.on_start()
                     new_instance = asyncio.create_task(new_event.run_loop())
-                    discord_id = user.doc_id
+                    self._running_users.add(user)
                     # append corountine with matched DiscordID
-                    if discord_id not in self._coroutines.keys():
-                        new_record = { discord_id: new_instance }
+                    if user.doc_id not in self._coroutines.keys():
+                        new_record = { user.doc_id: new_instance }
                         self._coroutines.update(new_record)
-                        self._running_users.add(user)
                 except Exception as e:
                     self._logger.exception(f"(User: {user.doc_id}) failed to launch the instance on cold start, exception: {e}")
 
