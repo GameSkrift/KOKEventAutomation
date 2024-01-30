@@ -80,7 +80,7 @@ class BaseEvent(NetworkManager):
 
 
 class BaseEventManager(Database):
-    _logger: logging.getLogger('EventManager')
+    _logger: logging.getLogger(__name__)
     _running_users: set[DiscordID] = set()
     _coroutines: dict[DiscordID, Coroutine] = dict()
     
@@ -110,11 +110,24 @@ class BaseEventManager(Database):
         Main entry for all customised EventManager coroutines
         """
         while self.end_time > int(datetime.now().timestamp()):
+            await self._premium_pass(semaphore)
+            # give premium users more time to run event tasks
+            await asyncio.sleep(10)
             (new_users, delete_users) = await self._maintain_users()
             await self._start_new_instances(new_users, semaphore)
             self._delete_running_instances(delete_users)
             # sleep for (default=60) seconds
             await asyncio.sleep(self._interval)
+
+    async def _premium_pass(self, semaphore) -> None:
+        """
+        Initialise ``self._running_users`` hash set with premium subscribers and with isolated run time on startup.
+        """
+        if self._running_users:
+            return None
+        premium_users = await self.user.get_premium_users()
+        sync_ids = set(map(lambda doc: doc.doc_id, premium_users))
+        await self._start_new_instances(sync_ids, semaphore)
 
     async def _start_new_instances(self, new_users: list[DiscordID], semaphore) -> None:
         """
@@ -160,5 +173,4 @@ class BaseEventManager(Database):
             # sync local _running_users hash set with user table storage
         else:
             new_users = sync_ids
-
         return (new_users, delete_users)
