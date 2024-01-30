@@ -79,9 +79,6 @@ class UserDocument(dict, BaseDocument):
         super().__init__(value)
         self.doc_id = doc_id
 
-    def __hash__(self) -> int:
-        return hash((self.doc_id, self.get_user_id()))
-
     @property
     def doc_id(self) -> DiscordID:
         return self._doc_id
