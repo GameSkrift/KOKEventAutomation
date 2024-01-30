@@ -16,7 +16,7 @@ from storage import Database, UserDocument, DiscordID, LOCAL_STORAGE
 __all__ = ('BaseConfig', 'BaseEvent', 'BaseEventManager')
 
 class BaseConfig:
-    _logger = logging.getLogger(__name__)
+    _logger = logging.getLogger('EventConfig')
     asset_uri = 'https://ntk-zone-api.kokmm.net/api/system/assets?asset_v=0&device_type=web'
 
     def __init__(self, config: str):
@@ -80,11 +80,11 @@ class BaseEvent(NetworkManager):
 
 
 class BaseEventManager(Database):
-    _logger: logging.getLogger(__name__)
-    _running_users: set[UserDocument] = set()
+    _logger: logging.getLogger('EventManager')
+    _running_users: set[DiscordID] = set()
     _coroutines: dict[DiscordID, Coroutine] = dict()
     
-    def __init__(self, config: str, filepath=LOCAL_STORAGE, interval=300):
+    def __init__(self, config: str, filepath=LOCAL_STORAGE, interval=60):
         super().__init__(filepath)
         self.config = config
         self._interval = interval
@@ -105,7 +105,7 @@ class BaseEventManager(Database):
         """
         raise NotImplementedError()
 
-    async def run(self, semaphore=asyncio.Semaphore(10)):
+    async def run(self, semaphore=asyncio.Semaphore(5)):
         """
         Main entry for all customised EventManager coroutines
         """
@@ -127,7 +127,6 @@ class BaseEventManager(Database):
                     new_event = self.create_user_instance(user)
                     await new_event.on_start()
                     new_instance = asyncio.create_task(new_event.run_loop())
-                    self._running_users.add(user)
                     # append corountine with matched DiscordID
                     if user.doc_id not in self._coroutines.keys():
                         new_record = { user.doc_id: new_instance }
@@ -152,14 +151,16 @@ class BaseEventManager(Database):
         """
         new_users = delete_users = set()
         from_table = await self.user.get_all_users()
+        sync_ids = set(map(lambda doc: doc.doc_id, from_table))
         if self._running_users:
-            new_users = set(from_table).difference(self._running_users)
-            delete_users = self._running_users.difference(set(from_table))
+            new_users = sync_ids.difference(self._running_users)
+            delete_users = self._running_users.difference(sync_ids)
+            self._logger.debug(f"Adding {len(new_users)} new subscribers ...")
+            self._logger.debug(f"Removing {len(delete_users)} subscribers ...")
             # sync local _running_users hash set with user table storage
             self._running_users.update(new_users)
-            self._running_users.symmetric_difference_update(delete_users)
+            self._running_users.difference_update(delete_users)
         else:
-            new_users = set(from_table)
-            self._running_users = new_users
+            self._running_users = sync_ids
 
         return (new_users, delete_users)
