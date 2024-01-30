@@ -19,7 +19,7 @@ def handler():
     return handler
 
 class MultiverseDatingManager(BaseEventManager):
-    _logger = logging.getLogger(__name__)
+    _logger = logging.getLogger('Clicker 2.5 Event Manager')
 
     def __init__(self):
         super().__init__('MultiverseEventSetting.zip')
