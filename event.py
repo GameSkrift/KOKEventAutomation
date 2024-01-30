@@ -134,7 +134,7 @@ class BaseEventManager(Database):
                         self._coroutines.update(new_record)
                         self._running_users.add(user)
                 except Exception as e:
-                    self._logger.exception(f"(User: {self.discord_user_id}) failed to launch the instance on cold start, exception: {e}")
+                    self._logger.exception(f"(User: {user.doc_id}) failed to launch the instance on cold start, exception: {e}")
 
     def _delete_running_instances(self, delete_users: list[DiscordID]) -> None:
         """
