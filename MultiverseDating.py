@@ -9,7 +9,7 @@ from contextlib import suppress
 from typing import override
 from network import NetworkManager, Response
 from event import BaseConfig, BaseEventManager, BaseEvent
-from storage import Database, UserDocument, DiscordID
+from storage import Database, DiscordID
 
 def handler():
     handler = logging.StreamHandler()
@@ -90,9 +90,9 @@ class MultiverseDatingManager(BaseEventManager):
             self._logger.error(f"There's no multiverse event running right now.")
 
     @override
-    def create_user_instance(self, user: UserDocument):
+    def create_user_instance(self, discord_id: DiscordID):
         #OPTIONAL: can import setting dictionaries in a setup functiom for clean code.
-        instance = MultiverseDating(user.doc_id, self.event_id, self.end_time, self.reward_list, self.gift_list, self.machine_list, self.avg_dict)
+        instance = MultiverseDating(discord_id, self.event_id, self.end_time, self.reward_list, self.gift_list, self.machine_list, self.avg_dict)
         return instance
 
 

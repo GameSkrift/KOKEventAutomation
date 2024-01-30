@@ -11,7 +11,7 @@ from datetime import datetime
 from abc import abstractmethod
 from typing import Coroutine
 from network import NetworkManager, CONFIG_DIR
-from storage import Database, UserDocument, DiscordID, LOCAL_STORAGE
+from storage import Database, DiscordID, LOCAL_STORAGE
 
 __all__ = ('BaseConfig', 'BaseEvent', 'BaseEventManager')
 
@@ -97,7 +97,7 @@ class BaseEventManager(Database):
         raise NotImplementedError()
 
     @abstractmethod
-    def create_user_instance(self, user: UserDocument) -> BaseEvent:
+    def create_user_instance(self, discord_id: DiscordID) -> BaseEvent:
         """
         This is where you initialise customised event class with event [setup](optional)
 
@@ -121,31 +121,29 @@ class BaseEventManager(Database):
         Create and start running user coroutines by ``asyncio.create_task``.
         Ff the event ``on_start()`` failed, drop the instance and wait for next ``self._interval``
         """
-        for user in new_users:
+        for discord_id in new_users:
             async with semaphore:
                 try:
-                    new_event = self.create_user_instance(user)
+                    new_event = self.create_user_instance(discord_id)
                     await new_event.on_start()
                     new_instance = asyncio.create_task(new_event.run_loop())
                     # append corountine with matched DiscordID
-                    if user.doc_id not in self._coroutines.keys():
-                        new_record = { user.doc_id: new_instance }
+                    if discord_id not in self._coroutines.keys():
+                        new_record = { discord_id: new_instance }
                         self._coroutines.update(new_record)
                 except Exception as e:
-                    self._logger.exception(f"(User: {user.doc_id}) failed to launch the instance on cold start, exception: {e}")
+                    self._logger.exception(f"(User: {discord_id}) failed to launch the instance on cold start, exception: {e}")
 
     def _delete_running_instances(self, delete_users: list[DiscordID]) -> None:
         """
         Cancel running coroutines matched by DiscordID, then delete entry from ``self._running_users``
         """
-        for user in delete_users:
-            delete_discord_id = user.doc_id
-            if delete_discord_id in self._coroutines.keys():
-                on_cancel_event = self._coroutines.pop(delete_discord_id)
+        for discord_id in delete_users:
+            if discord_id in self._coroutines.keys():
+                on_cancel_event = self._coroutines.pop(discord_id)
                 on_cancel_event.cancel()
-                self._running_users.discard(user)
                     
-    async def _maintain_users(self) -> (set[UserDocument], set[UserDocument]):
+    async def _maintain_users(self) -> (set[DiscordID], set[DiscordID]):
         """
         Maintain local hash set of running instances by comparing to table users, returns a tuple of new and deleted user sets
         """
