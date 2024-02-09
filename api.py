@@ -68,6 +68,9 @@ class GameAPI:
         **GET** /api/user/friend/requesting-list?[URI]
         **GET** /api/user/friend/suggest-list?[URI]
 
+        **POST** /api/user/getGlobalUserInfoList?[URI]
+            - **PAYLOAD** { "user_id_list": [ [USER_ID] ] }
+            - [USER_ID]: [1-9][0-9]{12}
         **POST** /api/user/equipment/equip?[URI]
             - **PAYLOAD** { "pet_serial_id": [PET_SERIAL_ID], "eq_serial_id": [EQ_SERIAL_ID] }
             - [PET_SERIAL_ID]: [a-z0-9]{40}
@@ -118,6 +121,7 @@ class GameAPI:
         """
         def __init__(self, url):
             self.info = f"{url}/api/user/info?"
+            self.getGlobalUserInfoList = f"{url}/api/user/getGlobalUserInfoList?"
             self.pet = self._Pet(url)
             self.pet_team = self._PetTeam(url)
             self.god = self._God(url)
@@ -424,7 +428,7 @@ class GameAPI:
             - [PET_GOD]: { "god_serial_id": [a-z0-9]{40} }{1,2}
         **POST** /api/event-boss/battle/end?[URI]
             - **PAYLOAD** { "season": [SEASON], "battle_serial_id": [BATTLE_SERIAL_ID] }
-            - [SEASON]: [1-9]|[1-9][0-9]*
+            - [SEASON]: [1-9][0-9]*
             - [BATTLE_SERIAL_ID]: [a-z0-9]{40}
         **POST** /api/event-boss/battle/claim?[URI]
             - **PAYLOAD** { "battle_serial_id": [BATTLE_SERIAL_ID] }
@@ -448,19 +452,47 @@ class GameAPI:
         [URI]: user_id={}&session_id={}&server_prefix={}
         [URI2]: event_id={}&user_id={}&session_id={}&server_prefix={}
         
-        **GET** /api/sexual_dating/claimItemExplore?[URI]
         **GET** /api/sexual_dating/records?[URI2]
         **GET** /api/sexual_dating/claim?[URI]
-
-        **POST** /api/sexual_dating/option/click?[URI]
+        
+        **POST** /api/sexual_dating/claimItemExplore?[URI]
+            - **PAYLOAD** { "event_id": [EVENT_ID] }
+            - [EVENT_ID]: [1-9][0-9]*
+        **POST** /api/sexual_dating/upgradeExploreItemTier?[URI]
+            - **PAYLOAD** { "event_id": [EVENT_ID], "tier": [TIER], "cost": [ [COST] ] }
+            - [EVENT_ID]: [1-9][0-9]*
+            - [TIER]: [2-4]
+            - [COST]: { "asset_type": 6,"asset_id": "[1-9][0-9]{6}","amount": 500|1500|4000 }
+        **POST** /api/sexual_dating/reset?[URI]
+            - **PAYLOAD** { "event_id": [EVENT_ID] }
+            - [EVENT_ID]: [1-9][0-9]*
+        **POST** /api/sexual_dating/saveMessage?[URI]
+            - **PAYLOAD** { "event_id": [EVENT_ID], "chapter_id": [CHAPTER_ID], "message_id": [MESSAGE_ID] }
+            - [EVENT_ID]: [1-9][0-9]*
+            - [CHAPTER_ID]: [1-5]
         **POST** /api/sexual_dating/choose?[URI]
+            - **PAYLOAD** { "event_id": [EVENT_ID], "chapter_id": [CHAPTER_ID], "message_id": [MESSAGE_ID], "selection": [SELECTION] }
+            - [EVENT_ID]: [1-9][0-9]*
+            - [CHAPTER_ID]: [1-5]
+            - [MESSAGE_ID]: [1-9][0-9]*
+            - [SELECTION]: [1-3]
+        **POST** /api/sexual_dating/option/click?[URI]
+            - **PAYLOAD** { "event_id": [EVENT_ID], "chapter_id": [CHAPTER_ID], "option_index": [OPTION_INDEX], "amount": [AMOUNT], "cost": [ [COST] ] }
+            - [EVENT_ID]: [1-9][0-9]*
+            - [CHAPTER_ID]: [1-5]
+            - [OPTION_INDEX]: [0-3]
+            - [AMOUNT]: [1-9][0-9]*
+            - [COST]: { "asset_type": 6,"asset_id": "[1-9][0-9]{6}","amount": [AMOUNT] }
         """
         def __init__(self, url):
-            self.claimItemExplore = f"{url}/api/sexual_dating/claimItemExplore?"
             self.records = f"{url}/api/sexual_dating/records?"
             self.claim = f"{url}/api/sexual_dating/claim?"
-            self.option = self._Option(url)
+            self.claimItemExplore = f"{url}/api/sexual_dating/claimItemExplore?"
+            self.upgradeExploreItemTier = f"{url}/api/sexual_dating/upgradeExploreItemTier?"
+            self.reset = f"{url}/api/sexual_dating/reset?"
+            self.saveMessage = f"{url}/api/sexual_dating/saveMessage?"
             self.choose = f"{url}/api/sexual_dating/choose?"
+            self.option = self._Option(url)
         class _Option:
             def __init__(self, url):
                 self.click = f"{url}/api/sexual_dating/option/click?"
@@ -473,29 +505,29 @@ class GameAPI:
 
         **POST** /api/multiverse_dating/view/avg?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
         **POST** /api/multiverse_dating/explore/claim?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
         **POST** /api/multiverse_dating/explore/upgrade?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID], "tier": [TIER], "cost": [ [COST] ] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
             - [TIER]: [2-4]
             - [COST]: { "asset_type": 6,"asset_id": "[1-9][0-9]{6}","amount": 500|1500|4000 }
         **POST** /api/multiverse_dating/meet?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
         **POST** /api/multiverse_dating/gift?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID], "item_id": [ITEM_ID] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
             - [ITEM_ID]: [1-9][0-9]{6}
         **POST** /api/multiverse_dating/level/claim?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID], "level": [LEVEL] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
             - [LEVEL]: [1-7]
         **POST** /api/multiverse_dating/select?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID], "select_id": 0, "cost": [ [COST] ] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
             - [COST]: { "asset_type": 6,"asset_id": "[0-9]{7}","amount": 25|30|35|40|50|75|100|125|150|160|170|180|190|200 }
         """
         def __init__(self, url):
@@ -527,35 +559,35 @@ class GameAPI:
 
         **POST** /api/mega-pet-event/main/avg/finish?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
         **POST** /api/mega-pet-event/daily-login/claim?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID], "day": [DAY] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
             - [DAY]: [1-9]|1[0-9]|2[0-4]
         **POST** /api/mega-pet-event/explore/claim?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
         **POST** /api/mega-pet-event/game-1/avg/finish?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
         **POST** /api/mega-pet-event/game-1/purchase/challenge-limit?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID], "cost": [{ "asset_type": 0, "asset_id": "0", "amount": [AMOUNT] }] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
             - [AMOUNT]: 200|350|500|650|800|1000  
         **POST** /api/mega-pet-event/game-1/action/finish?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID], "score": 150 }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
         **POST** /api/mega-pet-event/puzzle/draw?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID], "cost": [{ "asset_type": 6, "asset_id": ASSET_ID, "amount": 170 }]}
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
             - [ASSET_ID]: [0-9]{7}
         **POST** /api/mega-pet-event/puzzle/line/claim?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID], "line_index": [LINE_INDEX] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
             - [LINE_INDEX]: [0-9]
         **POST** /api/mega-pet-event/game-3/avg/finish?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID] }
-            - [EVENT_ID]: [1-9]|[1-9][0-9]*
+            - [EVENT_ID]: [1-9][0-9]*
         **POST** /api/mega-pet-event/game-3/action/finish?[URI]
             - **PAYLOAD** { "event_id": [EVENT_ID], "score": 100000, "cost": [{ "asset_type": 6, "asset_id": str, "amount": [AMOUNT] }], "cost_type": [COST_TYPE] }
             - [EVENT_ID]: [1-9][0-9]*
